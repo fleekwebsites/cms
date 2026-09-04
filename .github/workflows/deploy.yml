@@ -17,34 +17,35 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: mbstring, pdo, pdo_mysql, ctype, xml, dom, curl, bcmath, tokenizer, openssl
+          extensions: mbstring, pdo, pdo_mysql, ctype, xml, dom, curl, bcmath, tokenizer, openssl, fileinfo
           tools: composer:v2
 
       - name: Install Composer Dependencies
-        run: |
-          composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+        run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
-      - name: Setup Node.js & Build Assets
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 'lts/*'
+          cache: npm
 
-      - name: Build Assets
+      - name: Build Frontend Assets
         run: |
           npm ci
           npm run build
 
-      - name: Backup .env Before Deploy
-        uses: appleboy/ssh-action@master
+      - name: Backup .env on Server
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
+          port: ${{ secrets.SSH_PORT }}
           script: |
-            cd /home/${{ secrets.SSH_USERNAME }}/CMS/
-            if [ -f .env ]; then
-              cp .env .env.production.backup
+            APP_DIR="/home/${{ secrets.SSH_USERNAME }}/CMS"
+            mkdir -p "$APP_DIR"
+            if [ -f "$APP_DIR/.env" ]; then
+              cp "$APP_DIR/.env" "$APP_DIR/.env.production.backup"
               echo "✅ .env backed up"
             else
               echo "⚠️ No .env found to backup"
@@ -55,89 +56,117 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Deploy Application Files via Rsync
+      - name: Deploy Application Files
         run: |
-          # Create exclude file locally
           cat > /tmp/rsync-exclude.txt << 'EOF'
+          # Version control & CI
           .git/
-          .env
-          .env.production.backup
           .github/
+          .gitattributes
+          .gitignore
+
+          # Local/dev tooling
+          .cursor/
+          .claude/
+          .ai/
+          .codex/
+          .editorconfig
+          .mcp.json
+          .npmrc
+          .phpunit.cache/
+          .phpunit.result.cache
+          .scpignore
+          Toolnized_cms/
+          node_modules/
           tests/
+          phpunit.xml
+          vite.config.js
+          package.json
+          package-lock.json
+
+          # Docs
           *.md
+
+          # Environment (never overwrite production secrets)
+          .env
+          .env.backup
+          .env.production
+          .env.production.backup
+
+          # Server-managed runtime data (protected from --delete)
+          storage/app/
+          storage/framework/cache/
+          storage/framework/sessions/
+          storage/framework/views/
+          storage/logs/
+          bootstrap/cache/
+          public/storage
+          public/hot
           EOF
-          
+
           rsync -avz --delete \
-            -e "ssh -p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=no" \
             --exclude-from=/tmp/rsync-exclude.txt \
+            -e "ssh -p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=no" \
             ./ \
             ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:/home/${{ secrets.SSH_USERNAME }}/CMS/
 
-
-
       - name: Run Post-Deployment Commands
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port:  ${{ secrets.SSH_PORT }}
+          port: ${{ secrets.SSH_PORT }}
           script: |
-            # ✅ HARDENED PATH: Use absolute path from logs, not variable interpolation
+            set -e
             APP_DIR="/home/${{ secrets.SSH_USERNAME }}/CMS"
-            
-            echo "🔍 Verifying deployment directory..."
-            if [ ! -d "$APP_DIR" ]; then
-              echo "❌ CRITICAL: Directory $APP_DIR does not exist!"
-              echo "   Current user: $(whoami)"
-              echo "   Home dir: $HOME"
-              ls /home/*/CMS 2>/dev/null || echo "   No matching dirs found"
-              exit 1
-            fi
-            
             cd "$APP_DIR"
+
             echo "✅ Working directory: $(pwd)"
-            
-            # Safety check for .env
+
+            # Restore .env if missing
             if [ ! -f .env ]; then
-              echo "⚠️ .env missing! Restoring backup..."
-              cp .env.production.backup .env 2>/dev/null || {
-                echo " No backup found. Generating new key...";
-                php artisan key:generate --force;
-              }
+              echo "⚠️ .env missing — restoring backup..."
+              if [ -f .env.production.backup ]; then
+                cp .env.production.backup .env
+              else
+                echo "❌ No .env backup found. Aborting."
+                exit 1
+              fi
             fi
-            
-            if ! grep -q "^APP_KEY=base64:" .env; then
-              echo "⚠️ Invalid APP_KEY. Regenerating...";
-              php artisan key:generate --force;
-            else
-              echo "✅ APP_KEY verified.";
-            fi
-            
-            # Install dependencies
-            echo "📦 Installing composer dependencies..."
-            composer install --no-dev --optimize-autoloader --no-interaction
-            
-            # Clear config BEFORE migrations to prevent stale DB credentials
-            echo "🧹 Clearing cached configuration..."
-            php artisan config:clear
-            
-            # ✅ VERBOSE MIGRATIONS: See exactly what runs or fails
-            echo "🗄️ Running database migrations..."
-            php artisan migrate --force --verbose 2>&1
-            
-            # Rebuild caches AFTER successful migrations
-            echo "💾 Rebuilding application caches..."
+
+            # Ensure writable directories exist
+            mkdir -p storage/framework/{cache/data,sessions,views}
+            mkdir -p storage/logs
+            mkdir -p storage/app/public
+            mkdir -p bootstrap/cache
+
+            # Permissions for shared hosting
+            chmod -R ug+rwx storage bootstrap/cache
+
+            # Storage symlink for uploaded images
+            php artisan storage:link --force
+
+            # Dependencies (uses vendor shipped by CI; refreshes autoloader on server)
+            composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+
+            # Clear stale caches before migrations
+            php artisan optimize:clear
+
+            # Database
+            php artisan migrate --force
+
+            # Rebuild production caches
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
-            
-            echo "✅ Deployment complete!"
+
+            echo "✅ CMS deployed successfully!"
 
       - name: Notify on Success
         if: success()
-        run: echo "✅ CNA Testbank deployed successfully via SSH!"
-        
+        run: echo "✅ CMS deployed successfully via SSH!"
+
       - name: Notify on Failure
         if: failure()
-        run: echo "❌ Deployment failed! Check logs for details."
+        run: echo "❌ Deployment failed! Check GitHub Actions logs for details."
