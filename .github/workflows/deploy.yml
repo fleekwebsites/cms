@@ -1,0 +1,147 @@
+name: CMS Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo, pdo_mysql, ctype, xml, dom, curl, bcmath, tokenizer, openssl
+          tools: composer:v2
+
+      - name: Install Composer Dependencies
+        run: |
+          composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+
+      - name: Setup Node.js & Build Assets
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Build Assets
+        run: |
+          npm ci
+          npm run build
+
+      - name: Backup .env Before Deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 21098
+          script: |
+            cd /home/${{ secrets.SSH_USERNAME }}/CMS/
+            if [ -f .env ]; then
+              cp .env .env.production.backup
+              echo "✅ .env backed up"
+            else
+              echo "⚠️ No .env found to backup"
+            fi
+
+      - name: Setup SSH Agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Deploy Application Files via Rsync
+        run: |
+          # Create exclude file locally
+          cat > /tmp/rsync-exclude.txt << 'EOF'
+          .git/
+          node_modules/
+          vendor/
+          .env
+          .env.production.backup
+          storage/
+          bootstrap/cache/
+          .github/
+          tests/
+          *.md
+          EOF
+          
+          rsync -avz --delete \
+            -e "ssh -p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=no" \
+            --exclude-from=/tmp/rsync-exclude.txt \
+            ./ \
+            ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:/home/${{ secrets.SSH_USERNAME }}/CMS/
+
+
+
+      - name: Run Post-Deployment Commands
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port:  ${{ secrets.SSH_PORT }}
+          script: |
+            # ✅ HARDENED PATH: Use absolute path from logs, not variable interpolation
+            APP_DIR="/home/${{ secrets.SSH_USERNAME }}/CMS"
+            
+            echo "🔍 Verifying deployment directory..."
+            if [ ! -d "$APP_DIR" ]; then
+              echo "❌ CRITICAL: Directory $APP_DIR does not exist!"
+              echo "   Current user: $(whoami)"
+              echo "   Home dir: $HOME"
+              ls /home/*/CMS 2>/dev/null || echo "   No matching dirs found"
+              exit 1
+            fi
+            
+            cd "$APP_DIR"
+            echo "✅ Working directory: $(pwd)"
+            
+            # Safety check for .env
+            if [ ! -f .env ]; then
+              echo "⚠️ .env missing! Restoring backup..."
+              cp .env.production.backup .env 2>/dev/null || {
+                echo " No backup found. Generating new key...";
+                php artisan key:generate --force;
+              }
+            fi
+            
+            if ! grep -q "^APP_KEY=base64:" .env; then
+              echo "⚠️ Invalid APP_KEY. Regenerating...";
+              php artisan key:generate --force;
+            else
+              echo "✅ APP_KEY verified.";
+            fi
+            
+            # Install dependencies
+            echo "📦 Installing composer dependencies..."
+            composer install --no-dev --optimize-autoloader --no-interaction
+            
+            # Clear config BEFORE migrations to prevent stale DB credentials
+            echo "🧹 Clearing cached configuration..."
+            php artisan config:clear
+            
+            # ✅ VERBOSE MIGRATIONS: See exactly what runs or fails
+            echo "🗄️ Running database migrations..."
+            php artisan migrate --force --verbose 2>&1
+            
+            # Rebuild caches AFTER successful migrations
+            echo "💾 Rebuilding application caches..."
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+            
+            echo "✅ Deployment complete!"
+
+      - name: Notify on Success
+        if: success()
+        run: echo "✅ CNA Testbank deployed successfully via SSH!"
+        
+      - name: Notify on Failure
+        if: failure()
+        run: echo "❌ Deployment failed! Check logs for details."

@@ -1,0 +1,21 @@
+# Git files
+.git
+.gitignore
+
+# Dependencies (reinstalled on server)
+node_modules
+vendor
+
+# Tests & Docs
+tests
+README.md
+LICENSE
+
+# Environment & Keys
+.env
+.env.example
+storage/*.key
+
+# GitHub workflows
+.github
+
