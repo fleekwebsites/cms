@@ -147,9 +147,6 @@ jobs:
             # Storage symlink for uploaded images
             php artisan storage:link --force
 
-            # Dependencies (uses vendor shipped by CI; refreshes autoloader on server)
-            composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
-
             # Clear stale caches before migrations
             php artisan optimize:clear
 
