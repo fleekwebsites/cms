@@ -2,8 +2,7 @@
 
 namespace Database\Seeders;
 
-use App\Models\Article;
-use App\Models\Site;
+use App\Enums\Role;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -14,33 +13,28 @@ class DatabaseSeeder extends Seeder
 
     /**
      * Seed the application's database.
+     *
+     * Uses explicit records so this works in production where
+     * fakerphp/faker is not installed (--no-dev).
      */
     public function run(): void
     {
-        $admin = User::factory()->admin()->create([
-            'name' => 'Kennedy',
-            'email' => 'Kennedy.fleekpapers@gmail.com',
-            'password' => 'Password1-3',
-        ]);
+        User::query()->updateOrCreate(
+            ['email' => 'Kennedy.fleekpapers@gmail.com'],
+            [
+                'name' => 'Kennedy',
+                'password' => 'Password1-3',
+                'role' => Role::Admin,
+            ],
+        );
 
-        $writer = User::factory()->writer()->create([
-            'name' => 'Winfred',
-            'email' => 'winfred@fleekdevelopers.com',
-            'password' => 'Password1-3',
-        ]);
-
-        Site::factory()->count(2)->create();
-
-        Article::factory()
-            ->count(3)
-            ->for($admin)
-            ->blog()
-            ->create();
-
-        Article::factory()
-            ->count(2)
-            ->for($writer)
-            ->faq()
-            ->create();
+        User::query()->updateOrCreate(
+            ['email' => 'winfred@fleekdevelopers.com'],
+            [
+                'name' => 'Winfred',
+                'password' => 'Password1-3',
+                'role' => Role::Writer,
+            ],
+        );
     }
 }
