@@ -60,7 +60,6 @@ jobs:
           # Create exclude file locally
           cat > /tmp/rsync-exclude.txt << 'EOF'
           .git/
-          vendor/
           .env
           .env.production.backup
           .github/
