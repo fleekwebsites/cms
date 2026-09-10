@@ -42,10 +42,10 @@ When a site’s `api_endpoint` ends with `/content`, the CMS derives sibling URL
 | Resource | CMS calls | Example |
 |----------|-----------|---------|
 | Content | `{api_endpoint}` as configured | `https://yoursite.com/api/endpoint/` |
-| Authors | Replace trailing `content` with `authors/` | `https://yoursite.com/api/endpoint/authors/` |
-| Categories | Replace trailing `content` with `categories/` | `https://yoursite.com/api/endpoint/categories/` |
+| Authors | Add trailing  `authors/` to `{api_endpoint}`| `https://yoursite.com/api/endpoint/authors/` |
+| Categories | Add trailing `categories/`  to `{api_endpoint}` | `https://yoursite.com/api/endpoint/categories/` |
 
-If `api_endpoint` does **not** end with `/content`, the resource name is appended: `{api_endpoint}/authors/`.
+If `api_endpoint` does **not** end with `/` or `/content`, the resource name is appended: e.g, `{api_endpoint}/authors/`.
 
 ### Example receiver files
 
