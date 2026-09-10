@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\ArticleLayout;
 use App\Enums\ArticleStatus;
 use App\Enums\ArticleType;
+use App\Support\ReadingTimeEstimator;
 use Database\Factories\ArticleFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -16,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
-#[Fillable(['user_id', 'author_name_id', 'uuid', 'type', 'title', 'slug', 'excerpt', 'keywords', 'featured_image_url', 'content', 'layout', 'status', 'published_at'])]
+#[Fillable(['user_id', 'author_id', 'site_id', 'site_category_id', 'reading_time_minutes', 'uuid', 'type', 'title', 'slug', 'excerpt', 'keywords', 'featured_image_url', 'content', 'layout', 'status', 'published_at'])]
 class Article extends Model
 {
     /** @use HasFactory<ArticleFactory> */
@@ -52,11 +53,53 @@ class Article extends Model
     }
 
     /**
-     * @return BelongsTo<AuthorName, $this>
+     * @return BelongsTo<Author, $this>
      */
-    public function authorName(): BelongsTo
+    public function author(): BelongsTo
     {
-        return $this->belongsTo(AuthorName::class);
+        return $this->belongsTo(Author::class);
+    }
+
+    /**
+     * @return BelongsTo<Site, $this>
+     */
+    public function site(): BelongsTo
+    {
+        return $this->belongsTo(Site::class);
+    }
+
+    /**
+     * @return BelongsTo<SiteCategory, $this>
+     */
+    public function siteCategory(): BelongsTo
+    {
+        return $this->belongsTo(SiteCategory::class);
+    }
+
+    /**
+     * @return Attribute<string, never>
+     */
+    protected function displayAuthorName(): Attribute
+    {
+        return Attribute::get(fn (): string => $this->author?->name ?? $this->user->name);
+    }
+
+    public function readingTimeMinutes(): int
+    {
+        if ($this->reading_time_minutes !== null) {
+            return $this->reading_time_minutes;
+        }
+
+        return app(ReadingTimeEstimator::class)->estimate($this->content, $this->excerpt);
+    }
+
+    public function displayAuthorLine(): string
+    {
+        if ($this->author !== null) {
+            return $this->author->displayLine();
+        }
+
+        return $this->display_author_name;
     }
 
     /**
@@ -65,14 +108,6 @@ class Article extends Model
     public function publishLogs(): HasMany
     {
         return $this->hasMany(PublishLog::class);
-    }
-
-    /**
-     * @return Attribute<string, never>
-     */
-    protected function displayAuthorName(): Attribute
-    {
-        return Attribute::get(fn (): string => $this->authorName?->name ?? $this->user->name);
     }
 
     #[Scope]

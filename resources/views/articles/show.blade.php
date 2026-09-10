@@ -1,11 +1,20 @@
 <x-layouts.app>
-    <div class="mb-8 flex flex-wrap items-start justify-between gap-4">
-        <div>
+    <div class="mb-8 flex min-w-0 flex-wrap items-start justify-between gap-4">
+        <div class="min-w-0 flex-1">
             <p class="text-sm font-medium uppercase tracking-wide text-indigo-600">{{ $article->type->label() }}</p>
+            @if ($article->siteCategory)
+                <p class="mt-2 inline-flex rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-700">
+                    {{ $article->siteCategory->name }}
+                </p>
+            @endif
             <h1 class="mt-2 text-3xl font-semibold text-slate-900">{{ $article->title }}</h1>
-            <p class="mt-2 text-slate-600">
+            <p class="mt-2 max-w-full text-slate-600">
                 {{ $article->status->label() }} · {{ $article->layout->label() }}
-                · {{ $article->display_author_name }}
+                @if ($article->site)
+                    · {{ $article->site->name }}
+                @endif
+                · {{ $article->displayAuthorLine() }}
+                · {{ $article->readingTimeMinutes() }} min read
             </p>
         </div>
 
@@ -23,16 +32,29 @@
         </div>
     </div>
 
-    <div class="grid gap-6 lg:grid-cols-3">
-        <div class="space-y-6 lg:col-span-2">
-            <section class="card">
+    <div class="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div class="min-w-0 space-y-6">
+            <section class="card min-w-0">
                 <h2 class="mb-4 text-lg font-semibold text-slate-900">Preview</h2>
+                @if ($article->type === \App\Enums\ArticleType::Blog && $article->featured_image_url)
+                    <img
+                        src="{{ $article->featured_image_url }}"
+                        alt="{{ $article->title }}"
+                        class="mb-6 w-full max-h-96 rounded-xl border border-slate-200 object-cover"
+                    >
+                @endif
                 @if ($article->excerpt)
                     <p class="mb-4 text-slate-600">{{ $article->excerpt }}</p>
                 @endif
-                <div class="article-content">
-                    {!! $article->content !!}
+                <div class="article-content min-w-0 max-w-full">
+                    {!! $previewContent !!}
                 </div>
+                @if ($article->author?->bio)
+                    <div class="mt-8 border-t border-slate-200 pt-6">
+                        <p class="text-sm font-semibold text-slate-900">{{ $article->displayAuthorLine() }}</p>
+                        <p class="mt-2 text-sm leading-7 text-slate-600">{{ $article->author->bio }}</p>
+                    </div>
+                @endif
             </section>
 
             <section class="card">
@@ -74,29 +96,14 @@
             </section>
         </div>
 
-        <div class="space-y-6">
+        <div class="min-w-0 space-y-6">
             @can('publish', $article)
-                @if ($sites->isNotEmpty())
+                @if ($article->site)
                     <section class="card">
-                        <h2 class="mb-4 text-lg font-semibold text-slate-900">Publish to sites</h2>
-                        <form method="POST" action="{{ route('articles.publications.store', $article) }}" class="space-y-4">
+                        <h2 class="mb-4 text-lg font-semibold text-slate-900">Publish</h2>
+                        <p class="mb-4 text-sm text-slate-600">This article is assigned to <strong>{{ $article->site->name }}</strong>.</p>
+                        <form method="POST" action="{{ route('articles.publications.store', $article) }}">
                             @csrf
-                            <div class="space-y-2">
-                                @foreach ($sites as $site)
-                                    <label class="flex items-start gap-3 rounded-lg border border-slate-200 p-3">
-                                        <input
-                                            type="checkbox"
-                                            name="site_ids[]"
-                                            value="{{ $site->id }}"
-                                            class="mt-1 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                                        >
-                                        <span>
-                                            <span class="block font-medium text-slate-900">{{ $site->name }}</span>
-                                            <span class="block text-xs text-slate-500">{{ $site->api_endpoint }}</span>
-                                        </span>
-                                    </label>
-                                @endforeach
-                            </div>
                             <button type="submit" class="btn-primary w-full">Publish now</button>
                         </form>
                     </section>
@@ -107,9 +114,19 @@
                 <h2 class="mb-3 text-lg font-semibold text-slate-900">Metadata</h2>
                 <dl class="space-y-3">
                     <div>
-                        <dt class="text-slate-500">Author</dt>
-                        <dd class="font-medium text-slate-900">{{ $article->display_author_name }}</dd>
+                        <dt class="text-slate-500">Editor</dt>
+                        <dd class="font-medium text-slate-900">{{ $article->user->name }}</dd>
                     </div>
+                    <div>
+                        <dt class="text-slate-500">Author</dt>
+                        <dd class="font-medium text-slate-900">{{ $article->displayAuthorLine() }}</dd>
+                    </div>
+                    @if ($article->site)
+                        <div>
+                            <dt class="text-slate-500">Site</dt>
+                            <dd class="font-medium text-slate-900">{{ $article->site->name }}</dd>
+                        </div>
+                    @endif
                     @if ($article->keywords)
                         <div>
                             <dt class="text-slate-500">Keywords</dt>

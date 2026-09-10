@@ -9,13 +9,14 @@ use App\Enums\ArticleType;
 use App\Http\Requests\StoreArticleRequest;
 use App\Http\Requests\UpdateArticleRequest;
 use App\Models\Article;
-use App\Models\AuthorName;
+use App\Models\Author;
 use App\Models\Site;
+use App\Models\SiteCategory;
 use App\Models\User;
+use App\Support\ArticleContentFormatter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
@@ -27,7 +28,7 @@ class ArticleController extends Controller
 
         $articles = Article::query()
             ->visibleTo($request->user())
-            ->with(['user:id,name', 'authorName:id,name'])
+            ->with(['user:id,name', 'author:id,name', 'site:id,name', 'siteCategory:id,name'])
             ->when(
                 $request->filled('type'),
                 fn ($query) => $query->where('type', $request->string('type')->toString()),
@@ -62,7 +63,7 @@ class ArticleController extends Controller
             'slug' => Article::uniqueSlug($request->string('title')->toString()),
         ]);
 
-        $this->publishSelectedSites($request, $article, $publisher);
+        $this->publishToSite($article, $publisher);
 
         return redirect()
             ->route('articles.show', $article)
@@ -75,13 +76,15 @@ class ArticleController extends Controller
 
         $article->load([
             'user:id,name',
-            'authorName:id,name',
+            'author:id,name,credentials,bio',
+            'site:id,name',
+            'siteCategory:id,name',
             'publishLogs' => fn ($query) => $query->with('site:id,name')->latest()->orderByDesc('id'),
         ]);
 
         return view('articles.show', [
             'article' => $article,
-            'sites' => $this->publishableSites($request),
+            'previewContent' => app(ArticleContentFormatter::class)->normalize($article->content),
         ]);
     }
 
@@ -102,7 +105,7 @@ class ArticleController extends Controller
             'slug' => Article::uniqueSlug($request->string('title')->toString(), $article->id),
         ]);
 
-        $this->publishSelectedSites($request, $article->fresh(['authorName:id,name', 'user:id,name']), $publisher);
+        $this->publishToSite($article->fresh(['author:id,name,credentials,bio', 'site:id,name', 'siteCategory:id,name', 'user:id,name']), $publisher);
 
         return redirect()
             ->route('articles.show', $article)
@@ -125,15 +128,37 @@ class ArticleController extends Controller
      */
     private function formData(Request $request, ?Article $article = null): array
     {
-        $owner = $article?->user ?? $request->user();
+        $selectedSiteId = (int) old('site_id', $article?->site_id);
 
         return [
             'types' => ArticleType::cases(),
             'layouts' => ArticleLayout::cases(),
             'statuses' => ArticleStatus::cases(),
-            'sites' => $this->publishableSites($request),
-            'authorNames' => $this->authorNamesFor($owner),
+            'sites' => Site::query()->active()->orderBy('name')->orderBy('id')->get(['id', 'name']),
+            'siteCategories' => $selectedSiteId > 0
+                ? SiteCategory::query()->where('site_id', $selectedSiteId)->orderBy('name')->orderBy('id')->get(['id', 'name'])
+                : collect(),
+            'siteAuthors' => $selectedSiteId > 0
+                ? Author::query()->where('site_id', $selectedSiteId)->orderBy('name')->orderBy('id')->get(['id', 'name', 'credentials'])
+                : collect(),
+            'editorContent' => $this->editorContentForForm($request, $article),
         ];
+    }
+
+    private function editorContentForForm(Request $request, ?Article $article): ?string
+    {
+        $formatter = app(ArticleContentFormatter::class);
+        $oldContent = old('content');
+
+        if (is_string($oldContent) && $oldContent !== '') {
+            return $formatter->normalize($oldContent);
+        }
+
+        if ($article instanceof Article) {
+            return $formatter->normalize($article->content);
+        }
+
+        return null;
     }
 
     /**
@@ -155,6 +180,7 @@ class ArticleController extends Controller
             $publishedAt = null;
         }
 
+        $type = ArticleType::from($request->string('type')->toString());
         $featuredImageUrl = $request->string('featured_image_url')->toString() ?: $article?->featured_image_url;
 
         if ($request->file('featured_image') instanceof UploadedFile) {
@@ -162,81 +188,41 @@ class ArticleController extends Controller
             $featuredImageUrl = asset('storage/'.$path);
         }
 
+        $layout = $type === ArticleType::Faq
+            ? $request->string('layout')->toString()
+            : ArticleLayout::Default->value;
+
         return [
-            'type' => $request->string('type')->toString(),
+            'type' => $type->value,
             'title' => $request->string('title')->toString(),
             'excerpt' => $request->string('excerpt')->toString() ?: null,
             'keywords' => $request->string('keywords')->toString() ?: null,
-            'author_name_id' => $this->resolveAuthorNameId($request, $owner),
+            'site_id' => $request->integer('site_id'),
+            'site_category_id' => $request->integer('site_category_id'),
+            'author_id' => $request->integer('author_id'),
             'featured_image_url' => $featuredImageUrl,
-            'content' => $request->string('content')->toString(),
-            'layout' => $request->string('layout')->toString(),
+            'content' => app(ArticleContentFormatter::class)->normalize($request->string('content')->toString()),
+            'layout' => $layout,
             'status' => $status,
             'published_at' => $publishedAt,
+            'reading_time_minutes' => null,
         ];
     }
 
-    private function resolveAuthorNameId(StoreArticleRequest|UpdateArticleRequest $request, User $owner): ?int
+    private function publishToSite(Article $article, PublishArticleToSites $publisher): void
     {
-        $newName = trim($request->string('new_author_name')->toString());
-
-        if ($newName !== '') {
-            return AuthorName::query()->firstOrCreate([
-                'user_id' => $owner->id,
-                'name' => $newName,
-            ])->id;
-        }
-
-        if ($request->filled('author_name_id')) {
-            return AuthorName::query()
-                ->where('user_id', $owner->id)
-                ->whereKey($request->integer('author_name_id'))
-                ->value('id');
-        }
-
-        return null;
-    }
-
-    /**
-     * @return Collection<int, AuthorName>
-     */
-    private function authorNamesFor(User $owner)
-    {
-        return AuthorName::query()
-            ->where('user_id', $owner->id)
-            ->orderBy('name')
-            ->orderBy('id')
-            ->get(['id', 'name']);
-    }
-
-    /**
-     * @return Collection<int, Site>
-     */
-    private function publishableSites(Request $request)
-    {
-        $this->authorize('viewAny', Site::class);
-
-        return Site::query()
-            ->active()
-            ->orderBy('name')
-            ->orderBy('id')
-            ->get(['id', 'name', 'api_endpoint']);
-    }
-
-    private function publishSelectedSites(StoreArticleRequest|UpdateArticleRequest $request, Article $article, PublishArticleToSites $publisher): void
-    {
-        $siteIds = $request->validated('site_ids', []);
-
-        if ($article->status !== ArticleStatus::Published || $siteIds === []) {
+        if ($article->status !== ArticleStatus::Published || $article->site_id === null) {
             return;
         }
 
-        $sites = Site::query()
+        $site = Site::query()
             ->active()
-            ->whereIn('id', $siteIds)
-            ->orderBy('name')
-            ->get();
+            ->find($article->site_id);
 
-        $publisher->handle($article, $sites);
+        if ($site === null) {
+            return;
+        }
+
+        $publisher->handle($article, collect([$site]));
     }
 }

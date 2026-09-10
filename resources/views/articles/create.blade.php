@@ -1,7 +1,7 @@
 <x-layouts.app>
     <div class="mb-8">
         <h1 class="text-3xl font-semibold text-slate-900">Create article</h1>
-        <p class="mt-2 text-slate-600">Choose the article type, layout, and publishing targets.</p>
+        <p class="mt-2 text-slate-600">Select the destination site, author, and category, then write your content.</p>
     </div>
 
     <form method="POST" action="{{ route('articles.store') }}" enctype="multipart/form-data" class="space-y-6">

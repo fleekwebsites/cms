@@ -48,4 +48,30 @@
             </div>
         </section>
     </div>
+
+    <section class="card mt-6">
+        <h2 class="mb-4 text-lg font-semibold text-slate-900">Blog categories</h2>
+        <p class="mb-4 text-sm text-slate-600">Writers choose from these categories when drafting articles for this site.</p>
+
+        <form method="POST" action="{{ route('sites.categories.store', $site) }}" class="mb-6 flex flex-wrap gap-3">
+            @csrf
+            <input type="text" name="name" maxlength="120" required class="input max-w-sm" placeholder="NP Programs">
+            <button type="submit" class="btn-primary">Add category</button>
+        </form>
+
+        <div class="space-y-3">
+            @forelse ($site->categories as $category)
+                <div class="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+                    <span class="font-medium text-slate-900">{{ $category->name }}</span>
+                    <form method="POST" action="{{ route('sites.categories.destroy', [$site, $category]) }}" onsubmit="return confirm('Remove this category?')">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="text-sm text-rose-600 hover:text-rose-500">Remove</button>
+                    </form>
+                </div>
+            @empty
+                <p class="text-sm text-slate-500">No categories yet. Add one above.</p>
+            @endforelse
+        </div>
+    </section>
 </x-layouts.app>

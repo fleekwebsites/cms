@@ -28,7 +28,7 @@ class DashboardController extends Controller
             'userCount' => $user->isAdmin() ? User::query()->count() : null,
             'recentArticles' => Article::query()
                 ->visibleTo($user)
-                ->with(['user:id,name', 'authorName:id,name'])
+                ->with(['user:id,name', 'author:id,name,credentials', 'site:id,name'])
                 ->latest()
                 ->orderByDesc('id')
                 ->limit(6)

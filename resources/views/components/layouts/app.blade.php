@@ -21,6 +21,7 @@
                         @can('viewAny', App\Models\Site::class)
                             @if(auth()->user()->isAdmin())
                                 <x-nav-link :href="route('sites.index')" :active="request()->routeIs('sites.*')">Sites</x-nav-link>
+                                <x-nav-link :href="route('authors.index')" :active="request()->routeIs('authors.*')">Authors</x-nav-link>
                             @endif
                         @endcan
                         @can('viewAny', App\Models\User::class)

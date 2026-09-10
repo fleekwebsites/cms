@@ -17,27 +17,26 @@ class ArticlePublicationController extends Controller
         Article $article,
         PublishArticleToSites $publisher,
     ): RedirectResponse {
-        $sites = Site::query()
+        abort_unless($article->site_id !== null, 422, 'Assign a site before publishing.');
+
+        $site = Site::query()
             ->active()
-            ->whereIn('id', $request->validated('site_ids'))
-            ->orderBy('name')
-            ->get();
+            ->findOrFail($article->site_id);
 
         $article->update([
             'status' => ArticleStatus::Published,
             'published_at' => $article->published_at ?? now(),
         ]);
 
-        $logs = $publisher->handle($article->fresh(['authorName:id,name', 'user:id,name']), $sites);
+        $logs = $publisher->handle(
+            $article->fresh(['author:id,name,credentials,bio', 'site:id,name', 'siteCategory:id,name', 'user:id,name']),
+            collect([$site]),
+        );
 
-        $successful = $logs->where('status', PublishStatus::Success)->count();
-        $failed = $logs->where('status', PublishStatus::Failed)->count();
-
-        $message = "Published to {$successful} site".($successful === 1 ? '' : 's').'.';
-
-        if ($failed > 0) {
-            $message .= " {$failed} delivery".($failed === 1 ? '' : 's').' failed.';
-        }
+        $log = $logs->first();
+        $message = $log?->status === PublishStatus::Success
+            ? "Published to {$site->name}."
+            : "Publish attempt to {$site->name} failed.";
 
         return redirect()
             ->route('articles.show', $article)

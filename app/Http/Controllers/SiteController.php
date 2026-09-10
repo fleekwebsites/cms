@@ -51,6 +51,7 @@ class SiteController extends Controller
         $this->authorize('view', $site);
 
         $site->load([
+            'categories' => fn ($query) => $query->orderBy('name')->orderBy('id'),
             'publishLogs' => fn ($query) => $query->with('article:id,title')->latest()->orderByDesc('id')->limit(20),
         ]);
 

@@ -6,6 +6,9 @@ use App\Enums\ArticleLayout;
 use App\Enums\ArticleStatus;
 use App\Enums\ArticleType;
 use App\Models\Article;
+use App\Models\Author;
+use App\Models\Site;
+use App\Models\SiteCategory;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -16,23 +19,24 @@ use Illuminate\Support\Str;
 class ArticleFactory extends Factory
 {
     /**
-     * Define the model's default state.
-     *
      * @return array<string, mixed>
      */
     public function definition(): array
     {
         $title = fake()->sentence(6);
+        $site = Site::factory();
 
         return [
             'user_id' => User::factory(),
+            'site_id' => $site,
+            'site_category_id' => SiteCategory::factory()->for($site),
+            'author_id' => Author::factory()->for($site),
             'uuid' => (string) Str::uuid(),
             'type' => fake()->randomElement(ArticleType::cases()),
             'title' => $title,
             'slug' => Str::slug($title).'-'.fake()->unique()->numerify('####'),
             'excerpt' => fake()->paragraph(),
             'keywords' => 'blog, cms, content',
-            'author_name_id' => null,
             'content' => '<p>'.fake()->paragraphs(3, true).'</p>',
             'layout' => fake()->randomElement(ArticleLayout::cases()),
             'status' => ArticleStatus::Draft,

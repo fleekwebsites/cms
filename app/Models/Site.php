@@ -38,6 +38,30 @@ class Site extends Model
     }
 
     /**
+     * @return HasMany<SiteCategory, $this>
+     */
+    public function categories(): HasMany
+    {
+        return $this->hasMany(SiteCategory::class);
+    }
+
+    /**
+     * @return HasMany<Author, $this>
+     */
+    public function authors(): HasMany
+    {
+        return $this->hasMany(Author::class);
+    }
+
+    /**
+     * @return HasMany<Article, $this>
+     */
+    public function articles(): HasMany
+    {
+        return $this->hasMany(Article::class);
+    }
+
+    /**
      * @return HasMany<PublishLog, $this>
      */
     public function publishLogs(): HasMany
@@ -54,5 +78,16 @@ class Site extends Model
     public static function generateApiKey(): string
     {
         return 'cms_'.Str::lower(Str::random(40));
+    }
+
+    public function apiEndpointFor(string $resource): string
+    {
+        $endpoint = rtrim($this->api_endpoint, '/');
+
+        if (str_ends_with($endpoint, '/content')) {
+            return substr($endpoint, 0, -strlen('content')).$resource;
+        }
+
+        return $endpoint.'/'.$resource;
     }
 }

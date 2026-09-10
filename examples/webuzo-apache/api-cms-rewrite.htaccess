@@ -1,0 +1,26 @@
+# Place at: public_html/api/cms/.htaccess
+#
+# CMS site api_endpoint should be:
+#   https://yourdomain.com/api/cms/content
+#
+# Apache routes content/authors/categories to the receiver scripts.
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    RewriteRule ^content$ receive-cms-content.php [L,QSA]
+    RewriteRule ^authors$ receive-cms-authors.php [L,QSA]
+    RewriteRule ^categories$ receive-cms-categories.php [L,QSA]
+</IfModule>
+
+<IfModule mod_php.c>
+    php_value post_max_size 32M
+    php_value memory_limit 256M
+    php_value max_execution_time 120
+</IfModule>
+
+<IfModule mod_php8.c>
+    php_value post_max_size 32M
+    php_value memory_limit 256M
+    php_value max_execution_time 120
+</IfModule>

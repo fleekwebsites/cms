@@ -4,7 +4,6 @@ namespace App\Http\Requests;
 
 use App\Models\Article;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class StoreArticlePublicationRequest extends FormRequest
 {
@@ -21,9 +20,6 @@ class StoreArticlePublicationRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [
-            'site_ids' => ['required', 'array', 'min:1'],
-            'site_ids.*' => ['integer', Rule::exists('sites', 'id')->where('is_active', true)],
-        ];
+        return [];
     }
 }

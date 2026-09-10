@@ -2,25 +2,25 @@
 
 namespace App\Models;
 
-use Database\Factories\AuthorNameFactory;
+use Database\Factories\SiteCategoryFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['user_id', 'name'])]
-class AuthorName extends Model
+#[Fillable(['site_id', 'name'])]
+class SiteCategory extends Model
 {
-    /** @use HasFactory<AuthorNameFactory> */
+    /** @use HasFactory<SiteCategoryFactory> */
     use HasFactory;
 
     /**
-     * @return BelongsTo<User, $this>
+     * @return BelongsTo<Site, $this>
      */
-    public function user(): BelongsTo
+    public function site(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Site::class);
     }
 
     /**

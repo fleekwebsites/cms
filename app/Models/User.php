@@ -40,14 +40,6 @@ class User extends Authenticatable
         return $this->hasMany(Article::class);
     }
 
-    /**
-     * @return HasMany<AuthorName, $this>
-     */
-    public function authorNames(): HasMany
-    {
-        return $this->hasMany(AuthorName::class);
-    }
-
     public function isAdmin(): bool
     {
         return $this->role === Role::Admin;

@@ -6,7 +6,6 @@ use App\Enums\ArticleLayout;
 use App\Enums\ArticleStatus;
 use App\Enums\ArticleType;
 use App\Models\Article;
-use App\Models\AuthorName;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -25,27 +24,27 @@ class UpdateArticleRequest extends FormRequest
      */
     public function rules(): array
     {
-        /** @var Article $article */
-        $article = $this->route('article');
-
         return [
             'type' => ['required', Rule::enum(ArticleType::class)],
             'title' => ['required', 'string', 'max:60'],
             'excerpt' => ['nullable', 'string', 'max:2000'],
             'keywords' => ['nullable', 'string', 'max:5000'],
-            'author_name_id' => [
-                'nullable',
+            'site_id' => ['required', 'integer', Rule::exists('sites', 'id')->where('is_active', true)],
+            'site_category_id' => [
+                'required',
                 'integer',
-                Rule::exists(AuthorName::class, 'id')->where('user_id', $article->user_id),
+                Rule::exists('site_categories', 'id')->where(fn ($query) => $query->where('site_id', $this->integer('site_id'))),
             ],
-            'new_author_name' => ['nullable', 'string', 'max:255'],
+            'author_id' => [
+                'required',
+                'integer',
+                Rule::exists('authors', 'id')->where(fn ($query) => $query->where('site_id', $this->integer('site_id'))),
+            ],
             'featured_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,gif,webp', 'max:5120'],
             'featured_image_url' => ['nullable', 'url', 'max:2048'],
             'content' => ['required', 'string'],
-            'layout' => ['required', Rule::enum(ArticleLayout::class)],
+            'layout' => ['required_if:type,faq', Rule::enum(ArticleLayout::class)],
             'status' => ['required', Rule::enum(ArticleStatus::class)],
-            'site_ids' => ['nullable', 'array'],
-            'site_ids.*' => ['integer', Rule::exists('sites', 'id')->where('is_active', true)],
         ];
     }
 }

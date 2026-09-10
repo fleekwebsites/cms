@@ -6,7 +6,9 @@ use App\Enums\ArticleLayout;
 use App\Enums\ArticleStatus;
 use App\Enums\ArticleType;
 use App\Models\Article;
-use App\Models\AuthorName;
+use App\Models\Author;
+use App\Models\Site;
+use App\Models\SiteCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -18,6 +20,9 @@ class ArticleManagementTest extends TestCase
     public function test_writer_can_create_a_blog_article(): void
     {
         $writer = User::factory()->writer()->create();
+        $site = Site::factory()->create();
+        $category = SiteCategory::factory()->for($site)->create();
+        $author = Author::factory()->for($site)->create();
 
         $this->actingAs($writer)
             ->post(route('articles.store'), [
@@ -27,6 +32,9 @@ class ArticleManagementTest extends TestCase
                 'content' => '<p>Hello world</p>',
                 'layout' => ArticleLayout::Default->value,
                 'status' => ArticleStatus::Draft->value,
+                'site_id' => $site->id,
+                'site_category_id' => $category->id,
+                'author_id' => $author->id,
             ])
             ->assertRedirect();
 
@@ -35,12 +43,20 @@ class ArticleManagementTest extends TestCase
             'title' => 'Launch announcement',
             'type' => ArticleType::Blog->value,
             'status' => ArticleStatus::Draft->value,
+            'site_id' => $site->id,
+            'author_id' => $author->id,
         ]);
     }
 
-    public function test_writer_can_create_article_with_new_pen_name(): void
+    public function test_writer_can_select_admin_defined_author(): void
     {
         $writer = User::factory()->writer()->create();
+        $site = Site::factory()->create();
+        $category = SiteCategory::factory()->for($site)->create();
+        $author = Author::factory()->for($site)->create([
+            'name' => 'Felix Ombui',
+            'credentials' => 'DNP, FNP-BC',
+        ]);
 
         $this->actingAs($writer)
             ->post(route('articles.store'), [
@@ -49,40 +65,62 @@ class ArticleManagementTest extends TestCase
                 'content' => '<p>Hello world</p>',
                 'layout' => ArticleLayout::Default->value,
                 'status' => ArticleStatus::Draft->value,
-                'new_author_name' => 'Felix Ombui',
+                'site_id' => $site->id,
+                'site_category_id' => $category->id,
+                'author_id' => $author->id,
             ])
             ->assertRedirect();
-
-        $this->assertDatabaseHas('author_names', [
-            'user_id' => $writer->id,
-            'name' => 'Felix Ombui',
-        ]);
 
         $article = Article::query()->first();
 
         $this->assertNotNull($article);
-        $this->assertSame('Felix Ombui', $article->display_author_name);
+        $this->assertSame('Felix Ombui · DNP, FNP-BC', $article->displayAuthorLine());
     }
 
-    public function test_writer_can_select_existing_pen_name(): void
+    public function test_author_must_belong_to_selected_site(): void
     {
         $writer = User::factory()->writer()->create();
-        $penName = AuthorName::factory()->for($writer)->create(['name' => 'Editorial Team']);
+        $site = Site::factory()->create();
+        $category = SiteCategory::factory()->for($site)->create();
+        $otherAuthor = Author::factory()->create();
 
         $this->actingAs($writer)
+            ->from(route('articles.create'))
             ->post(route('articles.store'), [
                 'type' => ArticleType::Faq->value,
                 'title' => 'FAQ item',
                 'content' => '<p>Answer</p>',
                 'layout' => ArticleLayout::Default->value,
                 'status' => ArticleStatus::Draft->value,
-                'author_name_id' => $penName->id,
+                'site_id' => $site->id,
+                'site_category_id' => $category->id,
+                'author_id' => $otherAuthor->id,
             ])
-            ->assertRedirect();
+            ->assertRedirect(route('articles.create'))
+            ->assertSessionHasErrors('author_id');
+    }
 
-        $this->assertDatabaseHas('articles', [
-            'author_name_id' => $penName->id,
-        ]);
+    public function test_category_must_belong_to_selected_site(): void
+    {
+        $writer = User::factory()->writer()->create();
+        $site = Site::factory()->create();
+        $otherCategory = SiteCategory::factory()->create();
+        $author = Author::factory()->for($site)->create();
+
+        $this->actingAs($writer)
+            ->from(route('articles.create'))
+            ->post(route('articles.store'), [
+                'type' => ArticleType::Faq->value,
+                'title' => 'FAQ item',
+                'content' => '<p>Answer</p>',
+                'layout' => ArticleLayout::Default->value,
+                'status' => ArticleStatus::Draft->value,
+                'site_id' => $site->id,
+                'site_category_id' => $otherCategory->id,
+                'author_id' => $author->id,
+            ])
+            ->assertRedirect(route('articles.create'))
+            ->assertSessionHasErrors('site_category_id');
     }
 
     public function test_writer_only_sees_their_articles_in_index(): void

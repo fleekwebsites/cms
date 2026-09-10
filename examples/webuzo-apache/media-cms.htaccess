@@ -1,0 +1,16 @@
+# Place this file at: public_html/media/cms/.htaccess
+# Serves stored article images as static files.
+
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # Block PHP execution in the media tree.
+    RewriteRule \.php$ - [F,L]
+</IfModule>
+
+<IfModule mod_headers.c>
+    <FilesMatch "\.(jpg|jpeg|png|gif|webp|avif|svg)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+</IfModule>
