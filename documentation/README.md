@@ -30,7 +30,7 @@ There is no public REST API with bearer tokens. Remote integration uses **shared
 ### Typical integration flow
 
 1. **Deploy receiver scripts** on the remote site (see `examples/` in this repository).
-2. **Register a site** in the CMS with `api_endpoint` pointing at the content receiver, e.g. `https://yoursite.com/api/cms/content`.
+2. **Register a site** in the CMS with `api_endpoint` pointing at the content receiver, e.g. `https://yoursite.com/api/endpoint`.
 3. **Copy the generated API key** from the CMS site settings into the receiver configuration (`CMS_API_KEY`).
 4. **Create authors and categories** in the CMS — they are pushed to the remote site automatically.
 5. **Write and publish an article** — the CMS POSTs the full article JSON to the content endpoint.
@@ -41,9 +41,9 @@ When a site’s `api_endpoint` ends with `/content`, the CMS derives sibling URL
 
 | Resource | CMS calls | Example |
 |----------|-----------|---------|
-| Content | `{api_endpoint}` as configured | `https://yoursite.com/api/cms/content` |
-| Authors | Replace trailing `content` with `authors/` | `https://yoursite.com/api/cms/authors/` |
-| Categories | Replace trailing `content` with `categories/` | `https://yoursite.com/api/cms/categories/` |
+| Content | `{api_endpoint}` as configured | `https://yoursite.com/api/endpoint/content` |
+| Authors | Replace trailing `content` with `authors/` | `https://yoursite.com/api/endpoint/authors/` |
+| Categories | Replace trailing `content` with `categories/` | `https://yoursite.com/api/endpoint/categories/` |
 
 If `api_endpoint` does **not** end with `/content`, the resource name is appended: `{api_endpoint}/authors/`.
 
@@ -53,18 +53,17 @@ Reference implementations live in the repository:
 
 | File | Purpose |
 |------|---------|
-| `examples/receive-cms-content.php` | Article/content receiver (SQLite or custom storage) |
-| `examples/receive-cms-authors.php` | Author sync receiver |
-| `examples/receive-cms-categories.php` | Category sync receiver |
-| `examples/cms-receiver-common.php` | Shared auth, validation, and database helpers |
-| `examples/webuzo-apache/api-cms-rewrite.htaccess` | Apache rewrite rules for clean URLs |
+| `api/endpoint/` | Article/content receiver (SQLite or custom storage) |
+| `api/endpoint/authors/` | Author sync receiver |
+| `api/endpoint/categories/` | Category sync receiver |
+|
 
 ### Configuration (CMS)
 
 | Setting | Location | Default |
 |---------|----------|---------|
-| HTTP connect timeout | `config/cms.php` | 5 seconds |
-| HTTP request timeout | `config/cms.php` | 15 seconds |
+| HTTP connect timeout | `config/` | 5 seconds |
+| HTTP request timeout | `config/` | 15 seconds |
 
 Only **active** sites receive outbound requests. Inactive sites are skipped.
 
@@ -73,7 +72,7 @@ Only **active** sites receive outbound requests. Inactive sites are skipped.
 ### Publish article (CMS → remote)
 
 ```http
-POST https://yoursite.com/api/cms/content
+POST https://yoursite.com/api/endpoint/content
 Accept: application/json
 Content-Type: application/json
 X-API-Key: cms_abc123...
