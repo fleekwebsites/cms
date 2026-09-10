@@ -27,6 +27,7 @@
                         @can('viewAny', App\Models\User::class)
                             <x-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">Users</x-nav-link>
                         @endcan
+                        <x-nav-link :href="route('documentation.index')" :active="request()->routeIs('documentation.*')">Documentation</x-nav-link>
                     </nav>
                 </div>
 
