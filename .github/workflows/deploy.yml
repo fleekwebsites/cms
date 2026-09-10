@@ -85,7 +85,7 @@ jobs:
           package-lock.json
 
           # Docs
-          *.md
+          
 
           # Environment (never overwrite production secrets)
           .env
