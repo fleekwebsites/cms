@@ -41,7 +41,7 @@ When a site’s `api_endpoint` ends with `/content`, the CMS derives sibling URL
 
 | Resource | CMS calls | Example |
 |----------|-----------|---------|
-| Content | `{api_endpoint}` as configured | `https://yoursite.com/api/endpoint/content` |
+| Content | `{api_endpoint}` as configured | `https://yoursite.com/api/endpoint/` |
 | Authors | Replace trailing `content` with `authors/` | `https://yoursite.com/api/endpoint/authors/` |
 | Categories | Replace trailing `content` with `categories/` | `https://yoursite.com/api/endpoint/categories/` |
 
