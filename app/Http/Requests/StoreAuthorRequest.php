@@ -3,14 +3,17 @@
 namespace App\Http\Requests;
 
 use App\Models\Author;
+use App\Models\Site;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class StoreAuthorRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('create', Author::class) ?? false;
+        $site = $this->route('site');
+
+        return $site instanceof Site
+            && ($this->user()?->can('create', [Author::class, $site]) ?? false);
     }
 
     /**
@@ -19,13 +22,7 @@ class StoreAuthorRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'site_id' => ['required', 'integer', Rule::exists('sites', 'id')],
-            'name' => [
-                'required',
-                'string',
-                'max:255',
-                Rule::unique('authors', 'name')->where('site_id', $this->integer('site_id')),
-            ],
+            'name' => ['required', 'string', 'max:255'],
             'credentials' => ['nullable', 'string', 'max:255'],
             'bio' => ['nullable', 'string', 'max:2000'],
         ];

@@ -4,21 +4,28 @@ namespace App\Http\Controllers;
 
 use App\Models\Author;
 use App\Models\Site;
+use App\Support\RemoteRecord;
+use App\Support\RemoteSiteGateway;
 use Illuminate\Http\JsonResponse;
 
 class SiteAuthorController extends Controller
 {
+    public function __construct(private RemoteSiteGateway $gateway) {}
+
     public function index(Site $site): JsonResponse
     {
         $this->authorize('viewAny', [Author::class, $site]);
 
-        $authors = $site->authors()
-            ->orderBy('name')
-            ->orderBy('id')
-            ->get(['id', 'name', 'credentials']);
+        $fetch = $this->gateway->fetchAuthors($site);
 
-        return response()->json($authors->map(fn (Author $author): array => [
-            'id' => $author->id,
+        if (! $fetch->reachable) {
+            return response()->json([
+                'message' => $fetch->message,
+            ], 503);
+        }
+
+        return response()->json($fetch->items->map(fn (RemoteRecord $author): array => [
+            'id' => $author->int('id'),
             'name' => $author->displayLine(),
         ]));
     }

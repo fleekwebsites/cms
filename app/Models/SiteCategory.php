@@ -30,4 +30,12 @@ class SiteCategory extends Model
     {
         return $this->hasMany(Article::class);
     }
+
+    /**
+     * @return HasMany<Topic, $this>
+     */
+    public function topics(): HasMany
+    {
+        return $this->hasMany(Topic::class);
+    }
 }

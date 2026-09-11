@@ -1,8 +1,8 @@
 <x-layouts.app>
     <div class="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-            <h1 class="text-3xl font-semibold text-slate-900">Sites</h1>
-            <p class="mt-2 text-slate-600">Manage connected websites and their CMS API keys.</p>
+            <h1 class="text-3xl font-semibold text-slate-900">Connections</h1>
+            <p class="mt-2 text-slate-600">API keys, categories, and authors for each connected site.</p>
         </div>
         <a href="{{ route('sites.create') }}" class="btn-primary">Add site</a>
     </div>

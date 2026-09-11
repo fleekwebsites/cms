@@ -4,17 +4,17 @@
  * CMS content receiver (single-file, pure PHP).
  *
  * Deploy on the receiving site and point the CMS site api_endpoint here, e.g.:
- *   https://yoursite.com/api/cms/receive-cms-content.php
+ *   https://yoursite.com/api/receive-cms-content.php
  *
  * Webuzo + Apache layout (recommended on shared hosting):
- *   public_html/api/cms/receive-cms-content.php      <- this file
- *   public_html/api/cms/receive-cms-authors.php
- *   public_html/api/cms/receive-cms-categories.php
- *   public_html/api/cms/cms-receiver-common.php      <- shared MySQL config
- *   public_html/media/cms/articles/                 <- saved images (web-visible)
+ *   public_html/api/receive-cms-content.php      <- this file
+ *   public_html/api/receive-cms-authors.php
+ *   public_html/api/receive-cms-categories.php
+ *   public_html/api/cms-receiver-common.php      <- shared MySQL config
+ *   public_html/media/articles/                 <- saved images (web-visible)
  *
  * Copy examples/webuzo-apache/*.htaccess into the matching folders.
- * Set the Webuzo config block below, then chmod 775 on media/cms and api/cms/storage.
+ * Set the Webuzo config block below, then chmod 775 on media/cms and api/storage.
  *
  * Expects JSON POST from the CMS with headers:
  *   Content-Type: application/json
@@ -35,14 +35,14 @@ const CMS_API_KEY = 'replace-with-your-api-key';
  * Webuzo / Apache (shared hosting) — use these instead of the defaults below:
  *
  * const CMS_STORAGE_ROOT = dirname(__DIR__, 2).'/media/cms';
- * const CMS_PUBLIC_MEDIA_BASE = '/media/cms/articles';
+ * const CMS_PUBLIC_MEDIA_BASE = '/media/articles';
  * const CMS_DB_PATH = __DIR__.'/storage/cms.sqlite';
  */
 
 /** Default layout: everything next to this script. */
 const CMS_STORAGE_ROOT = __DIR__.'/storage';
 
-/** Public URL path to CMS_STORAGE_ROOT/articles (Webuzo: /media/cms/articles). */
+/** Public URL path to CMS_STORAGE_ROOT/articles (Webuzo: /media/articles). */
 const CMS_PUBLIC_MEDIA_BASE = '/media/articles';
 
 /** Max decoded image size (bytes). */

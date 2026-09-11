@@ -1,153 +1,121 @@
 <x-layouts.app>
     <div class="mb-8 flex min-w-0 flex-wrap items-start justify-between gap-4">
         <div class="min-w-0 flex-1">
-            <p class="text-sm font-medium uppercase tracking-wide text-indigo-600">{{ $article->type->label() }}</p>
-            @if ($article->siteCategory)
+            <p class="text-sm font-medium uppercase tracking-wide text-indigo-600">{{ $article->type()->label() }}</p>
+            @if ($categoryName)
                 <p class="mt-2 inline-flex rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-700">
-                    {{ $article->siteCategory->name }}
+                    {{ $categoryName }}
+                    @if ($topicName)
+                        · {{ $topicName }}
+                    @endif
                 </p>
             @endif
-            <h1 class="mt-2 text-3xl font-semibold text-slate-900">{{ $article->title }}</h1>
+            <h1 class="mt-2 text-3xl font-semibold text-slate-900">{{ $article->string('title') }}</h1>
             <p class="mt-2 max-w-full text-slate-600">
-                {{ $article->status->label() }} · {{ $article->layout->label() }}
-                @if ($article->site)
-                    · {{ $article->site->name }}
+                {{ $article->status()->label() }} · {{ $article->layout()->label() }}
+                · {{ $site->name }}
+                @if ($authorRecord)
+                    · {{ $authorRecord->displayLine() }}
                 @endif
-                · {{ $article->displayAuthorLine() }}
                 · {{ $article->readingTimeMinutes() }} min read
             </p>
         </div>
 
         <div class="flex flex-wrap gap-3">
-            @can('update', $article)
-                <a href="{{ route('articles.edit', $article) }}" class="btn-secondary">Edit</a>
-            @endcan
-            @can('delete', $article)
-                <form method="POST" action="{{ route('articles.destroy', $article) }}" onsubmit="return confirm('Delete this article?')">
+            @if (! $pendingSync)
+                <a href="{{ route('sites.articles.edit', [$site, $article->key]) }}" class="btn-secondary">Edit</a>
+            @endif
+            @if(auth()->user()->isAdmin())
+                <form method="POST" action="{{ route('sites.articles.destroy', [$site, $article->key]) }}" onsubmit="return confirm('Delete this article from the remote site?')">
                     @csrf
                     @method('DELETE')
                     <button type="submit" class="btn-danger">Delete</button>
                 </form>
-            @endcan
+            @endif
         </div>
     </div>
+
+    @if ($pendingSync)
+        <div class="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <p class="font-medium">Waiting for remote site</p>
+            <p class="mt-1">This article is stored temporarily on the CMS and will be sent to {{ $site->name }} as soon as the site is reachable.</p>
+        </div>
+    @endif
 
     <div class="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div class="min-w-0 space-y-6">
             <section class="card min-w-0">
                 <h2 class="mb-4 text-lg font-semibold text-slate-900">Preview</h2>
-                @if ($article->type === \App\Enums\ArticleType::Blog && $article->featured_image_url)
+                @if ($article->type() === \App\Enums\ArticleType::Blog && $article->string('featured_image_url'))
                     <img
-                        src="{{ $article->featured_image_url }}"
-                        alt="{{ $article->title }}"
+                        src="{{ $article->string('featured_image_url') }}"
+                        alt="{{ $article->string('title') }}"
                         class="mb-6 w-full max-h-96 rounded-xl border border-slate-200 object-cover"
                     >
                 @endif
-                @if ($article->excerpt)
-                    <p class="mb-4 text-slate-600">{{ $article->excerpt }}</p>
+                @if ($article->string('excerpt'))
+                    <p class="mb-4 text-slate-600">{{ $article->string('excerpt') }}</p>
                 @endif
                 <div class="article-content min-w-0 max-w-full">
                     {!! $previewContent !!}
                 </div>
-                @if ($article->author?->bio)
+                @if ($authorRecord?->string('bio'))
                     <div class="mt-8 border-t border-slate-200 pt-6">
-                        <p class="text-sm font-semibold text-slate-900">{{ $article->displayAuthorLine() }}</p>
-                        <p class="mt-2 text-sm leading-7 text-slate-600">{{ $article->author->bio }}</p>
+                        <p class="text-sm font-semibold text-slate-900">{{ $authorRecord->displayLine() }}</p>
+                        <p class="mt-2 text-sm leading-7 text-slate-600">{{ $authorRecord->string('bio') }}</p>
                     </div>
                 @endif
-            </section>
-
-            <section class="card">
-                <h2 class="mb-4 text-lg font-semibold text-slate-900">Publish history</h2>
-                <div class="space-y-4">
-                    @forelse ($article->publishLogs as $log)
-                        <div class="rounded-xl border border-slate-200 p-4">
-                            <div class="flex items-center justify-between gap-3">
-                                <div>
-                                    <p class="font-medium text-slate-900">{{ $log->site->name }}</p>
-                                    <p class="mt-1 text-sm text-slate-500">
-                                        HTTP {{ $log->response_code ?? 'n/a' }} · {{ $log->created_at->format('M j, Y g:i A') }}
-                                    </p>
-                                </div>
-                                <span @class([
-                                    'badge',
-                                    'bg-emerald-100 text-emerald-700' => $log->status->value === 'success',
-                                    'bg-rose-100 text-rose-700' => $log->status->value === 'failed',
-                                ])>
-                                    {{ $log->status->label() }}
-                                </span>
-                            </div>
-
-                            @if ($log->error_message)
-                                <p class="mt-3 text-sm text-rose-700">{{ $log->error_message }}</p>
-                            @endif
-
-                            @if ($log->response_payload)
-                                <details class="mt-3">
-                                    <summary class="cursor-pointer text-sm font-medium text-slate-700">Response payload</summary>
-                                    <pre class="mt-2 overflow-x-auto rounded-lg bg-slate-900 p-4 text-xs text-slate-100">{{ $log->response_payload }}</pre>
-                                </details>
-                            @endif
-                        </div>
-                    @empty
-                        <p class="text-sm text-slate-500">This article has not been published yet.</p>
-                    @endforelse
-                </div>
             </section>
         </div>
 
         <div class="min-w-0 space-y-6">
-            @can('publish', $article)
-                @if ($article->site)
-                    <section class="card">
-                        <h2 class="mb-4 text-lg font-semibold text-slate-900">Publish</h2>
-                        <p class="mb-4 text-sm text-slate-600">This article is assigned to <strong>{{ $article->site->name }}</strong>.</p>
-                        <form method="POST" action="{{ route('articles.publications.store', $article) }}">
+            @if (! $pendingSync)
+                <section class="card">
+                    <h2 class="mb-4 text-lg font-semibold text-slate-900">Publishing</h2>
+
+                    @if ($article->status() === \App\Enums\ArticleStatus::Draft)
+                        <p class="mb-4 text-sm text-slate-600">This article is still a draft. Mark it as complete when editing is finished, then publish it to {{ $site->name }}.</p>
+                        <form method="POST" action="{{ route('sites.articles.completion.store', [$site, $article->key]) }}">
                             @csrf
-                            <button type="submit" class="btn-primary w-full">Publish now</button>
+                            <button type="submit" class="btn-primary w-full">Mark as complete</button>
                         </form>
-                    </section>
-                @endif
-            @endcan
+                    @elseif ($article->status() === \App\Enums\ArticleStatus::Complete)
+                        <p class="mb-4 text-sm text-slate-600">Editing is complete. Publish this article to {{ $site->name }} when you are ready.</p>
+                        <form method="POST" action="{{ route('sites.articles.publications.store', [$site, $article->key]) }}">
+                            @csrf
+                            <button type="submit" class="btn-primary w-full">Publish</button>
+                        </form>
+                    @else
+                        <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+                            <p class="text-sm font-medium text-emerald-900">Published</p>
+                            <p class="mt-1 text-sm text-emerald-800">This article is live on {{ $site->name }}.</p>
+                        </div>
+                    @endif
+                </section>
+            @endif
 
             <section class="card text-sm text-slate-600">
                 <h2 class="mb-3 text-lg font-semibold text-slate-900">Metadata</h2>
                 <dl class="space-y-3">
-                    <div>
-                        <dt class="text-slate-500">Editor</dt>
-                        <dd class="font-medium text-slate-900">{{ $article->user->name }}</dd>
-                    </div>
-                    <div>
-                        <dt class="text-slate-500">Author</dt>
-                        <dd class="font-medium text-slate-900">{{ $article->displayAuthorLine() }}</dd>
-                    </div>
-                    @if ($article->site)
+                    @if ($authorRecord)
                         <div>
-                            <dt class="text-slate-500">Site</dt>
-                            <dd class="font-medium text-slate-900">{{ $article->site->name }}</dd>
+                            <dt class="text-slate-500">Author</dt>
+                            <dd class="font-medium text-slate-900">{{ $authorRecord->displayLine() }}</dd>
                         </div>
                     @endif
-                    @if ($article->keywords)
+                    @if ($article->string('keywords'))
                         <div>
                             <dt class="text-slate-500">Keywords</dt>
-                            <dd class="font-medium text-slate-900">{{ $article->keywords }}</dd>
+                            <dd class="font-medium text-slate-900">{{ $article->string('keywords') }}</dd>
                         </div>
                     @endif
                     <div>
                         <dt class="text-slate-500">Slug</dt>
-                        <dd class="font-medium text-slate-900">{{ $article->slug }}</dd>
+                        <dd class="font-medium text-slate-900">{{ $article->string('slug') }}</dd>
                     </div>
                     <div>
                         <dt class="text-slate-500">UUID</dt>
-                        <dd class="break-all font-medium text-slate-900">{{ $article->uuid }}</dd>
-                    </div>
-                    <div>
-                        <dt class="text-slate-500">Created</dt>
-                        <dd class="font-medium text-slate-900">{{ $article->created_at->format('M j, Y g:i A') }}</dd>
-                    </div>
-                    <div>
-                        <dt class="text-slate-500">Updated</dt>
-                        <dd class="font-medium text-slate-900">{{ $article->updated_at->format('M j, Y g:i A') }}</dd>
+                        <dd class="break-all font-medium text-slate-900">{{ $article->key }}</dd>
                     </div>
                 </dl>
             </section>

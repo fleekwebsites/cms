@@ -6,10 +6,10 @@ declare(strict_types=1);
  * Shared config + helpers for CMS receiver endpoints.
  *
  * Webuzo layout:
- *   public_html/api/cms/receive-cms-content.php
- *   public_html/api/cms/receive-cms-authors.php
- *   public_html/api/cms/receive-cms-categories.php
- *   public_html/api/cms/cms-receiver-common.php
+ *   public_html/api/receive-cms-content.php
+ *   public_html/api/receive-cms-authors.php
+ *   public_html/api/receive-cms-categories.php
+ *   public_html/api/cms-receiver-common.php
  */
 
 // --- Configuration (edit once for all receivers) ------------------------------

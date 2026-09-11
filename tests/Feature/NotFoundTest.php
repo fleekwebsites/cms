@@ -30,9 +30,10 @@ class NotFoundTest extends TestCase
     {
         $writer = User::factory()->writer()->create();
         $otherArticle = Article::factory()->create();
+        $this->grantSiteAccess($writer, $otherArticle->site);
 
         $this->actingAs($writer)
-            ->get(route('articles.show', $otherArticle))
+            ->get(route('sites.articles.show', [$otherArticle->site, $otherArticle]))
             ->assertNotFound();
     }
 }

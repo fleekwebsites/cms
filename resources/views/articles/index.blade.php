@@ -1,11 +1,19 @@
 <x-layouts.app>
     <div class="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-            <h1 class="text-3xl font-semibold text-slate-900">Articles</h1>
-            <p class="mt-2 text-slate-600">Create blogs and FAQs, then publish them to connected sites.</p>
+        <h1 class="text-3xl font-semibold text-slate-900">Articles</h1>
+        <p class="mt-2 text-slate-600">Content is loaded from {{ $site->name }}. The CMS does not store articles locally.</p>
         </div>
-        <a href="{{ route('articles.create') }}" class="btn-primary">New article</a>
+        <a href="{{ route('sites.articles.create', $site) }}" class="btn-primary">New article</a>
     </div>
+
+    @unless ($remoteReachable)
+        <div class="mb-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+            <p class="font-medium">Remote site unreachable</p>
+            <p class="mt-1">{{ $remoteMessage }}</p>
+            <p class="mt-2">Articles waiting to sync will still appear below when they were saved temporarily.</p>
+        </div>
+    @endunless
 
     <form method="GET" class="mb-6 flex flex-wrap gap-3">
         <select name="type" class="input w-auto">
@@ -32,9 +40,7 @@
                         <th class="px-6 py-3 font-medium">Type</th>
                         <th class="px-6 py-3 font-medium">Status</th>
                         <th class="px-6 py-3 font-medium">Layout</th>
-                        @if(auth()->user()->isAdmin())
-                            <th class="px-6 py-3 font-medium">Author</th>
-                        @endif
+                        <th class="px-6 py-3 font-medium">Sync</th>
                         <th class="px-6 py-3 font-medium">Updated</th>
                     </tr>
                 </thead>
@@ -42,22 +48,26 @@
                     @forelse ($articles as $article)
                         <tr class="hover:bg-slate-50">
                             <td class="px-6 py-4">
-                                <a href="{{ route('articles.show', $article) }}" class="font-medium text-indigo-600 hover:text-indigo-500">
-                                    {{ $article->title }}
+                                <a href="{{ route('sites.articles.show', [$site, $article->key]) }}" class="font-medium text-indigo-600 hover:text-indigo-500">
+                                    {{ $article->string('title') }}
                                 </a>
                             </td>
-                            <td class="px-6 py-4">{{ $article->type->label() }}</td>
-                            <td class="px-6 py-4">{{ $article->status->label() }}</td>
-                            <td class="px-6 py-4">{{ $article->layout->label() }}</td>
-                            @if(auth()->user()->isAdmin())
-                                <td class="px-6 py-4">{{ $article->display_author_name }}</td>
-                            @endif
-                            <td class="px-6 py-4 text-slate-500">{{ $article->updated_at->diffForHumans() }}</td>
+                            <td class="px-6 py-4">{{ $article->type()->label() }}</td>
+                            <td class="px-6 py-4">{{ $article->status()->label() }}</td>
+                            <td class="px-6 py-4">{{ $article->layout()->label() }}</td>
+                            <td class="px-6 py-4">
+                                @if ($article->bool('pending_sync'))
+                                    <span class="badge bg-amber-100 text-amber-800">Waiting for site</span>
+                                @else
+                                    <span class="badge bg-emerald-100 text-emerald-700">On site</span>
+                                @endif
+                            </td>
+                            <td class="px-6 py-4 text-slate-500">{{ $article->updatedAt()?->diffForHumans() ?? '—' }}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ auth()->user()->isAdmin() ? 6 : 5 }}" class="px-6 py-8 text-center text-slate-500">
-                                No articles found.
+                            <td colspan="6" class="px-6 py-8 text-center text-slate-500">
+                                No articles found on the remote site.
                             </td>
                         </tr>
                     @endforelse

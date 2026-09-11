@@ -3,16 +3,17 @@
 namespace App\Http\Requests;
 
 use App\Models\Article;
+use App\Models\Site;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreArticlePublicationRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        $article = $this->route('article');
+        $site = $this->route('site');
 
-        return $article instanceof Article
-            && ($this->user()?->can('publish', $article) ?? false);
+        return $site instanceof Site
+            && ($this->user()?->can('publish', [Article::class, $site]) ?? false);
     }
 
     /**

@@ -5,131 +5,132 @@ namespace Tests\Feature;
 use App\Enums\ArticleLayout;
 use App\Enums\ArticleStatus;
 use App\Enums\ArticleType;
-use App\Models\Article;
-use App\Models\Author;
 use App\Models\Site;
-use App\Models\SiteCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class ArticleManagementTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_writer_can_create_a_blog_article(): void
+    public function test_writer_can_create_a_blog_article_on_remote_site(): void
     {
         $writer = User::factory()->writer()->create();
-        $site = Site::factory()->create();
-        $category = SiteCategory::factory()->for($site)->create();
-        $author = Author::factory()->for($site)->create();
+        $site = Site::factory()->create([
+            'api_endpoint' => 'https://remote.test/api/cms/content',
+        ]);
+        $this->grantSiteAccess($writer, $site);
+        $this->fakeRemoteSite($site, [
+            'https://remote.test/api/cms/content*' => Http::response(['status' => 'accepted'], 201),
+        ]);
 
         $this->actingAs($writer)
-            ->post(route('articles.store'), [
+            ->post(route('sites.articles.store', $site), [
                 'type' => ArticleType::Blog->value,
                 'title' => 'Launch announcement',
                 'excerpt' => 'A short summary',
                 'content' => '<p>Hello world</p>',
                 'layout' => ArticleLayout::Default->value,
                 'status' => ArticleStatus::Draft->value,
-                'site_id' => $site->id,
-                'site_category_id' => $category->id,
-                'author_id' => $author->id,
+                'site_category_id' => 1,
+                'topic_id' => 1,
+                'author_id' => 1,
             ])
-            ->assertRedirect();
+            ->assertRedirect()
+            ->assertSessionHas('status');
 
-        $this->assertDatabaseHas('articles', [
-            'user_id' => $writer->id,
+        $this->assertDatabaseMissing('articles', [
             'title' => 'Launch announcement',
-            'type' => ArticleType::Blog->value,
-            'status' => ArticleStatus::Draft->value,
-            'site_id' => $site->id,
-            'author_id' => $author->id,
-        ]);
-    }
-
-    public function test_writer_can_select_admin_defined_author(): void
-    {
-        $writer = User::factory()->writer()->create();
-        $site = Site::factory()->create();
-        $category = SiteCategory::factory()->for($site)->create();
-        $author = Author::factory()->for($site)->create([
-            'name' => 'Felix Ombui',
-            'credentials' => 'DNP, FNP-BC',
         ]);
 
-        $this->actingAs($writer)
-            ->post(route('articles.store'), [
-                'type' => ArticleType::Blog->value,
-                'title' => 'Launch announcement',
-                'content' => '<p>Hello world</p>',
-                'layout' => ArticleLayout::Default->value,
-                'status' => ArticleStatus::Draft->value,
-                'site_id' => $site->id,
-                'site_category_id' => $category->id,
-                'author_id' => $author->id,
-            ])
-            ->assertRedirect();
-
-        $article = Article::query()->first();
-
-        $this->assertNotNull($article);
-        $this->assertSame('Felix Ombui · DNP, FNP-BC', $article->displayAuthorLine());
+        Http::assertSent(fn ($request): bool => str_contains($request->url(), '/content')
+            && $request['title'] === 'Launch announcement'
+            && $request['editor_user_id'] === $writer->id);
     }
 
-    public function test_author_must_belong_to_selected_site(): void
+    public function test_author_must_exist_on_remote_site(): void
     {
         $writer = User::factory()->writer()->create();
-        $site = Site::factory()->create();
-        $category = SiteCategory::factory()->for($site)->create();
-        $otherAuthor = Author::factory()->create();
+        $site = Site::factory()->create([
+            'api_endpoint' => 'https://remote.test/api/cms/content',
+        ]);
+        $this->grantSiteAccess($writer, $site);
+        $this->fakeRemoteSite($site);
 
         $this->actingAs($writer)
-            ->from(route('articles.create'))
-            ->post(route('articles.store'), [
+            ->from(route('sites.articles.create', $site))
+            ->post(route('sites.articles.store', $site), [
                 'type' => ArticleType::Faq->value,
                 'title' => 'FAQ item',
                 'content' => '<p>Answer</p>',
                 'layout' => ArticleLayout::Default->value,
                 'status' => ArticleStatus::Draft->value,
-                'site_id' => $site->id,
-                'site_category_id' => $category->id,
-                'author_id' => $otherAuthor->id,
+                'site_category_id' => 1,
+                'author_id' => 999,
             ])
-            ->assertRedirect(route('articles.create'))
+            ->assertRedirect(route('sites.articles.create', $site))
             ->assertSessionHasErrors('author_id');
     }
 
-    public function test_category_must_belong_to_selected_site(): void
+    public function test_category_must_exist_on_remote_site(): void
     {
         $writer = User::factory()->writer()->create();
-        $site = Site::factory()->create();
-        $otherCategory = SiteCategory::factory()->create();
-        $author = Author::factory()->for($site)->create();
+        $site = Site::factory()->create([
+            'api_endpoint' => 'https://remote.test/api/cms/content',
+        ]);
+        $this->grantSiteAccess($writer, $site);
+        $this->fakeRemoteSite($site);
 
         $this->actingAs($writer)
-            ->from(route('articles.create'))
-            ->post(route('articles.store'), [
+            ->from(route('sites.articles.create', $site))
+            ->post(route('sites.articles.store', $site), [
                 'type' => ArticleType::Faq->value,
                 'title' => 'FAQ item',
                 'content' => '<p>Answer</p>',
                 'layout' => ArticleLayout::Default->value,
                 'status' => ArticleStatus::Draft->value,
-                'site_id' => $site->id,
-                'site_category_id' => $otherCategory->id,
-                'author_id' => $author->id,
+                'site_category_id' => 999,
+                'author_id' => 1,
             ])
-            ->assertRedirect(route('articles.create'))
+            ->assertRedirect(route('sites.articles.create', $site))
             ->assertSessionHasErrors('site_category_id');
     }
 
     public function test_writer_only_sees_their_articles_in_index(): void
     {
         $writer = User::factory()->writer()->create();
-        $ownArticle = Article::factory()->for($writer)->create(['title' => 'Mine']);
-        Article::factory()->create(['title' => 'Someone else']);
+        $site = Site::factory()->create([
+            'api_endpoint' => 'https://remote.test/api/cms/content',
+        ]);
+        $this->grantSiteAccess($writer, $site);
 
-        $response = $this->actingAs($writer)->get(route('articles.index'));
+        $this->fakeRemoteSite($site, [
+            'https://remote.test/api/cms/content*' => Http::response([
+                [
+                    'uuid' => (string) Str::uuid(),
+                    'title' => 'Mine',
+                    'type' => 'blog',
+                    'layout' => 'default',
+                    'status' => 'draft',
+                    'content' => '<p>Hello</p>',
+                    'editor_user_id' => $writer->id,
+                ],
+                [
+                    'uuid' => (string) Str::uuid(),
+                    'title' => 'Someone else',
+                    'type' => 'blog',
+                    'layout' => 'default',
+                    'status' => 'draft',
+                    'content' => '<p>Hello</p>',
+                    'editor_user_id' => $writer->id + 99,
+                ],
+            ], 200),
+        ]);
+
+        $response = $this->actingAs($writer)->get(route('sites.articles.index', $site));
 
         $response->assertOk();
         $response->assertSee('Mine');
@@ -139,10 +140,26 @@ class ArticleManagementTest extends TestCase
     public function test_admin_sees_all_articles_in_index(): void
     {
         $admin = User::factory()->admin()->create();
-        Article::factory()->create(['title' => 'Writer article']);
+        $site = Site::factory()->create([
+            'api_endpoint' => 'https://remote.test/api/cms/content',
+        ]);
+
+        $this->fakeRemoteSite($site, [
+            'https://remote.test/api/cms/content*' => Http::response([
+                [
+                    'uuid' => (string) Str::uuid(),
+                    'title' => 'Writer article',
+                    'type' => 'blog',
+                    'layout' => 'default',
+                    'status' => 'draft',
+                    'content' => '<p>Hello</p>',
+                    'editor_user_id' => 999,
+                ],
+            ], 200),
+        ]);
 
         $this->actingAs($admin)
-            ->get(route('articles.index'))
+            ->get(route('sites.articles.index', $site))
             ->assertOk()
             ->assertSee('Writer article');
     }
@@ -150,22 +167,65 @@ class ArticleManagementTest extends TestCase
     public function test_writer_cannot_delete_an_article(): void
     {
         $writer = User::factory()->writer()->create();
-        $article = Article::factory()->for($writer)->create();
+        $site = Site::factory()->create([
+            'api_endpoint' => 'https://remote.test/api/cms/content',
+        ]);
+        $this->grantSiteAccess($writer, $site);
+        $uuid = (string) Str::uuid();
+
+        $this->fakeRemoteSite($site, [
+            "https://remote.test/api/cms/content/{$uuid}" => Http::response([
+                'uuid' => $uuid,
+                'title' => 'Mine',
+                'type' => 'blog',
+                'layout' => 'default',
+                'status' => 'draft',
+                'content' => '<p>Hello</p>',
+                'editor_user_id' => $writer->id,
+            ], 200),
+        ]);
 
         $this->actingAs($writer)
-            ->delete(route('articles.destroy', $article))
+            ->delete(route('sites.articles.destroy', [$site, $uuid]))
             ->assertForbidden();
     }
 
-    public function test_admin_can_delete_an_article(): void
+    public function test_admin_can_delete_an_article_from_remote_site(): void
     {
         $admin = User::factory()->admin()->create();
-        $article = Article::factory()->create();
+        $site = Site::factory()->create([
+            'api_endpoint' => 'https://remote.test/api/cms/content',
+        ]);
+        $uuid = (string) Str::uuid();
+
+        Http::preventStrayRequests();
+        Http::fake([
+            "https://remote.test/api/cms/content/{$uuid}" => Http::sequence()
+                ->push([
+                    'uuid' => $uuid,
+                    'title' => 'Delete me',
+                    'type' => 'blog',
+                    'layout' => 'default',
+                    'status' => 'draft',
+                    'content' => '<p>Hello</p>',
+                ], 200)
+                ->push(['status' => 'deleted'], 200),
+            'https://remote.test/api/cms/authors*' => Http::response([], 200),
+            'https://remote.test/api/cms/categories*' => Http::response([], 200),
+        ]);
 
         $this->actingAs($admin)
-            ->delete(route('articles.destroy', $article))
-            ->assertRedirect(route('articles.index'));
+            ->delete(route('sites.articles.destroy', [$site, $uuid]))
+            ->assertRedirect(route('sites.articles.index', $site));
+    }
 
-        $this->assertDatabaseMissing('articles', ['id' => $article->id]);
+    public function test_writer_without_delegation_cannot_open_a_site_workspace(): void
+    {
+        $writer = User::factory()->writer()->create();
+        $site = Site::factory()->create();
+
+        $this->actingAs($writer)
+            ->get(route('sites.articles.index', $site))
+            ->assertForbidden();
     }
 }

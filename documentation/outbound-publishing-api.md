@@ -1,253 +1,288 @@
-# Outbound publishing API
+# Outbound traffic from CMS
 
-When content is published or metadata is created/updated in the CMS, the application sends HTTP **POST** requests to the configured remote site. This document describes **what the CMS sends**.
+When users work in the CMS, the application sends HTTP requests **to your site**. This document describes **when** those requests fire, **where** they go, and **what** JSON bodies contain.
 
-Implementation references:
+Your site implements the receiver side; see [Remote site receiver API](remote-site-receiver-api.md) for the full contract.
 
-- Articles: `app/Actions/PublishArticleToSites.php`
-- Authors: `app/Actions/PublishAuthorToSite.php`
-- Categories: `app/Actions/PublishSiteCategoryToSite.php`
-- HTTP client: `app/Support/SiteApiClient.php`
+Implementation references in the CMS codebase:
+
+- `app/Support/RemoteSiteGateway.php` — all outbound calls
+- `app/Support/SiteApiClient.php` — HTTP client
+- `app/Support/RemoteIdMapper.php` — client id → your primary key translation
+- `app/Support/PendingRemoteWriteQueue.php` — retry queue
 
 ---
 
-## Common request properties
+## Common properties
 
-All outbound calls share:
+Every outbound call:
 
 | Property | Value |
 |----------|-------|
-| Method | `POST` |
+| Method | GET, POST, or DELETE (per operation) |
 | `Accept` | `application/json` |
-| `Content-Type` | `application/json` (implicit via JSON body) |
-| `X-API-Key` | Site’s API key (`cms_…`) |
-| `Idempotency-Key` | See per-endpoint table below |
-| Connect timeout | 5 seconds (`config('cms.php')`) |
+| `Content-Type` | `application/json` on POST |
+| `X-API-Key` | Connection API key (`cms_…`) |
+| `Idempotency-Key` | On POST and DELETE |
+| Connect timeout | 5 seconds |
 | Request timeout | 15 seconds |
 
-Only sites with `is_active = true` receive requests.
+Only connections with **active** status receive traffic.
 
-### Success criteria
+### Success
 
-The CMS treats any **2xx** HTTP status as success. The response body is stored in publish logs (truncated to 10,000 characters).
+Any **2xx** HTTP status is treated as success.
 
-### Failure handling
+On taxonomy POST success, the CMS reads `id` and `client_id` from the response body and stores the mapping. See [Client ID mapping](id-mapping.md).
 
-- Network errors and non-2xx responses are logged with `status: failed`, HTTP code, and error message.
-- Author/category sync failures surface as flash messages in the CMS UI but do not roll back local records.
+### Failure and retry
+
+| Condition | CMS behavior |
+|-----------|--------------|
+| Connection error | Queue write; show warning to user |
+| HTTP `5xx` | Queue write; show warning |
+| HTTP `429` | Queue write; show warning |
+| HTTP `4xx` (except 429) | Fail immediately; show error message |
+| Inactive site | No request sent |
+
+Queued writes retry via `php artisan cms:flush-pending-writes` (also schedulable).
 
 ---
 
-## 1. Publish article (content)
+## URL derivation
 
-### URL
+Given `api_endpoint = https://yourdomain.com/api/`:
 
-The site’s `api_endpoint` field **exactly as configured**, e.g.:
+| Resource | URL |
+|----------|-----|
+| Articles | `{api_endpoint}` | `https://yourdomain.com/api/` |
+| Authors | `{base}authors/` | `https://yourdomain.com/api/authors/` |
+| Categories | `{base}categories/` | `https://yourdomain.com/api/categories/` |
+| Topics | `{base}topics/` | `https://yourdomain.com/api/topics/` |
 
-```
-https://yoursite.com/api/endpoint
-```
+Single-article GET/DELETE append the UUID to `{api_endpoint}`: `{api_endpoint}/{uuid}`. Taxonomy GET/DELETE append the id: `/authors/{id}`, etc.
+
+---
+
+## Articles
+
+### When the CMS sends
+
+| User action | Effect |
+|-------------|--------|
+| Create article | POST full payload, `status` from form (usually `draft`) |
+| Update article | POST full payload with same `uuid` |
+| Mark as complete | POST with `status: "complete"`, no `published_at` |
+| Publish | POST with `status: "published"` and `published_at` |
+| Delete article (admin) | DELETE `{api_endpoint}/{uuid}` |
+
+Articles are **always stored on your site**, including drafts—not only on publish.
 
 ### Idempotency-Key
 
 ```
-{article-uuid}-{site-id}
+{uuid}
 ```
 
-Example: `550e8400-e29b-41d4-a716-446655440000-3`
+Example: `550e8400-e29b-41d4-a716-446655440000`
 
-### When triggered
+### POST body
 
-- User clicks **Publish** on an article (`POST /articles/{article}/publications`).
-- Article status is set to `published` and `published_at` is set if not already present.
-- Only the article’s assigned site receives the request (not a multi-site fan-out per action).
+Built by `RemoteArticlePayload`. Key fields:
 
-### JSON body
+| Field | Notes |
+|-------|-------|
+| `uuid` | Stable identifier |
+| `slug`, `type`, `layout`, `title`, `content`, `content_format` | Required |
+| `status` | `draft`, `complete`, or `published` |
+| `reading_time_minutes` | Estimated; minimum 1 for non-empty content |
+| `site_category_id`, `author_id` | Translated to your primary keys |
+| `topic_id` | Blogs only; translated to your primary key |
+| `site_id`, `site_name` | CMS connection metadata |
+| `editor_user_id`, `editor_name` | CMS editor metadata |
+| `published_at` | Only when `status` is `published` |
+| `excerpt`, `keywords` | When provided |
+| Featured image | `featured_image_base64` + mime (+ filename) when embeddable |
 
-#### Required fields
+Taxonomy **names are not included**—only integer foreign keys.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `uuid` | string | 36-character article UUID (stable identifier for upserts) |
-| `slug` | string | URL slug |
-| `type` | string | `blog` or `faq` |
-| `layout` | string | `default`, `featured`, `magazine`, `minimal`, or `split` |
-| `title` | string | Article title (max 60 chars in CMS form) |
-| `content` | string | Normalized HTML (see [Content formatting](data-reference.md#content-formatting)) |
-| `content_format` | string | Always `html` |
-| `reading_time_minutes` | integer | Estimated reading time (minimum `1` for non-empty content) |
+Before send, `RemoteIdMapper::translateArticlePayload()` resolves category, author, and topic ids.
 
-#### Optional fields
+### GET (CMS reads)
 
-Included only when present in the CMS record:
+| Call | Purpose |
+|------|---------|
+| `GET {api_endpoint}` | Article list in CMS workspace |
+| `GET {api_endpoint}/{uuid}` | Article detail, edit form, publish actions |
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `excerpt` | string | Short summary (max 2,000 chars in CMS) |
-| `keywords` | string | Comma-separated keywords (max 5,000 chars) |
-| `site_category_id` | integer | CMS category ID on the target site |
-| `author_id` | integer | CMS author ID on the target site |
-| `site_id` | integer | CMS site ID |
-| `site_name` | string | Human-readable site name |
-| `published_at` | string | UTC timestamp `Y-m-d H:i:s` |
-
-#### Featured image
-
-If the article has a `featured_image_url`:
-
-1. **Preferred:** CMS embeds the image if it is stored locally under `/storage/…`:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `featured_image_base64` | string | Base64-encoded binary (no data-URI prefix) |
-| `featured_image_mime` | string | MIME type, e.g. `image/jpeg` |
-| `featured_image_filename` | string | Original filename, e.g. `featured.jpg` |
-
-2. **Fallback:** If the image cannot be read from local storage (e.g. external URL only), the CMS sends:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `featured_image_url` | string | Original URL |
-
-> **Note:** The reference receiver **rejects** `featured_image_url` without embedded Base64 (`422`). Re-upload images through the CMS so they are stored locally before publishing.
-
-#### Fields NOT sent
-
-The CMS does **not** embed author name, credentials, bio, or category name in the article payload. Remote sites must resolve `author_id` and `site_category_id` from previously synced author/category records.
-
-### Example payload
-
-```json
-{
-  "uuid": "550e8400-e29b-41d4-a716-446655440000",
-  "slug": "how-to-prepare-for-nursing-exams",
-  "type": "blog",
-  "layout": "magazine",
-  "title": "How to Prepare for Nursing Exams",
-  "content": "<p style=\"text-align:center\">Nursing exams require disciplined study.</p><p><span style=\"color:#e60000\">Important:</span> start early.</p>",
-  "content_format": "html",
-  "reading_time_minutes": 4,
-  "excerpt": "Essential tips for nursing exam success",
-  "keywords": "nursing, exams, study tips",
-  "site_category_id": 12,
-  "author_id": 7,
-  "site_id": 3,
-  "site_name": "Nursing Elites",
-  "published_at": "2026-09-10 09:30:00",
-  "featured_image_base64": "iVBORw0KGgoAAAANSUhEUgAA...",
-  "featured_image_mime": "image/jpeg",
-  "featured_image_filename": "featured.jpg"
-}
-```
-
-### cURL example
-
-```bash
-curl -X POST "https://yoursite.com/api/endpoint" \
-  -H "Accept: application/json" \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: cms_your_api_key_here" \
-  -H "Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000-3" \
-  -d @article-payload.json
-```
+Optional query: `type`, `status`.
 
 ---
 
-## 2. Sync author
+## Authors
 
-### URL
+### When the CMS sends
 
-Derived from content endpoint:
-
-```
-{base}/authors/
-```
-
-Example: `https://yoursite.com/api/endpoint/authors/`
+| User action | HTTP |
+|-------------|------|
+| Create author | POST |
+| Update author | POST (same `id`) |
+| Delete author | DELETE |
 
 ### Idempotency-Key
 
 ```
-author-{author-id}
+author-{id}
 ```
 
-### When triggered
+On create, `{id}` is the CMS-generated client id (100 000 – 999 999).
 
-- Admin creates an author (`POST /authors`).
-- Admin updates an author (`PUT/PATCH /authors/{author}`).
-
-### JSON body
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `id` | integer | Yes | CMS author ID (use as primary key on remote site) |
-| `name` | string | Yes | Display name |
-| `credentials` | string \| null | No | e.g. `DNP, FNP-BC` |
-| `bio` | string \| null | No | Author biography (max 2,000 chars in CMS) |
-
-### Example
+### POST body
 
 ```json
 {
-  "id": 7,
+  "id": 456789,
   "name": "Elena Marsh",
   "credentials": "DNP, FNP-BC",
-  "bio": "Family nurse practitioner and educator."
+  "bio": "Optional biography."
 }
 ```
 
+### GET (CMS reads)
+
+| Call | Purpose |
+|------|---------|
+| `GET /authors/` | Author list and article form dropdown |
+
 ---
 
-## 3. Sync category
+## Categories
 
-### URL
+### When the CMS sends
 
-```
-{base}/categories/
-```
-
-Example: `https://yoursite.com/api/endpoint/categories/`
+| User action | HTTP |
+|-------------|------|
+| Create category (form or categories page) | POST |
+| Update category | POST |
+| Delete category | DELETE |
 
 ### Idempotency-Key
 
 ```
-category-{category-id}
+category-{id}
 ```
 
-### When triggered
-
-- Admin creates a category on a site (`POST /sites/{site}/categories`).
-
-Category deletion is **local only** — no DELETE request is sent to the remote site.
-
-### JSON body
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `id` | integer | Yes | CMS category ID |
-| `name` | string | Yes | Category name (max 120 chars in CMS) |
-
-### Example
+### POST body
 
 ```json
 {
-  "id": 12,
+  "id": 456789,
   "name": "NP Programs"
 }
 ```
 
+Slug is **not** sent; generate on your site if needed.
+
+Before topic or article send, `site_category_id` values are translated via stored mappings.
+
+### GET (CMS reads)
+
+| Call | Purpose |
+|------|---------|
+| `GET /categories/` | Category list, article form, categories page |
+
 ---
 
-## Publish logs (CMS-side)
+## Topics
 
-Each article publish attempt creates a `publish_logs` record:
+### When the CMS sends
 
-| Field | Description |
-|-------|-------------|
-| `request_payload` | Copy of sent JSON; `content` and `featured_image_base64` replaced with `[omitted: N bytes]` |
-| `response_code` | HTTP status or `null` on connection failure |
-| `response_payload` | Response body (JSON pretty-printed, max 10k chars) |
-| `status` | `success` or `failed` |
-| `error_message` | HTTP reason phrase or exception message on failure |
+| User action | HTTP |
+|-------------|------|
+| Add topic from article form | POST |
+| (No dedicated topic admin page) | |
 
-View logs on the article **Publish history** section in the CMS UI.
+### Idempotency-Key
+
+```
+topic-{id}
+```
+
+### POST body
+
+```json
+{
+  "id": 654321,
+  "site_category_id": 7,
+  "name": "Exam prep"
+}
+```
+
+`site_category_id` is translated to your category primary key when a mapping exists.
+
+### GET (CMS reads)
+
+| Call | Purpose |
+|------|---------|
+| `GET /topics/?site_category_id={id}` | Topic dropdown for selected category |
+
+The CMS passes the category id currently selected in the form (your primary key or client id before resolution on read—your list endpoint should return consistent primary keys).
+
+---
+
+## Pending write queue
+
+When a write is queued:
+
+1. Payload is stored locally on the CMS (large article bodies may spill to disk).
+2. User sees a warning that the site was unreachable; changes will sync later.
+3. `cms:flush-pending-writes` retries POST/DELETE with the same idempotency key.
+4. When a taxonomy mapping arrives, pending payloads referencing client ids are rewritten to primary keys before retry.
+
+Your receiver should remain **idempotent** so retries do not create duplicates.
+
+---
+
+## Article workflow (status)
+
+```
+draft  ──►  complete  ──►  published
+  │              │              │
+  POST           POST           POST
+  (save)    (mark complete)  (publish)
+```
+
+| Status | Sent to your site | `published_at` |
+|--------|-------------------|----------------|
+| `draft` | Yes, on save | Omitted |
+| `complete` | Yes, on “Mark as complete” | Omitted |
+| `published` | Yes, on “Publish” | UTC timestamp set |
+
+Publish is blocked in the CMS until status is `complete`.
+
+---
+
+## DELETE operations
+
+| Resource | URL | When |
+|----------|-----|------|
+| Article | `DELETE {api_endpoint}/{uuid}` | Admin deletes from CMS |
+| Author | `DELETE /authors/{id}` | Admin removes author |
+| Category | `DELETE /categories/{id}` | Admin removes category |
+
+Topics are not deleted from a dedicated CMS UI in the current version; implement DELETE for API completeness.
+
+---
+
+## What the CMS stores locally
+
+The CMS keeps **connection settings**, **users**, **delegations**, **client-id mappings**, and **pending failed writes**. It does **not** keep a copy of article or taxonomy content after a successful sync—that lives on your site.
+
+---
+
+## Related documentation
+
+- [Remote site receiver API](remote-site-receiver-api.md)
+- [Client ID mapping](id-mapping.md)
+- [Integration guide](integration-guide.md)
+- [Data reference](data-reference.md)

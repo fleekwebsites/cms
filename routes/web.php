@@ -10,6 +10,7 @@ use App\Http\Controllers\DocumentationController;
 use App\Http\Controllers\SiteAuthorController;
 use App\Http\Controllers\SiteCategoryController;
 use App\Http\Controllers\SiteController;
+use App\Http\Controllers\TopicController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -35,19 +36,6 @@ Route::middleware('auth')->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
 
     Route::post('articles/images', ArticleImageController::class)->name('articles.images.store');
-    Route::post('articles/{article}/publications', [ArticlePublicationController::class, 'store'])
-        ->name('articles.publications.store');
-    Route::resource('articles', ArticleController::class);
-
-    Route::get('sites/{site}/categories', [SiteCategoryController::class, 'index'])
-        ->name('sites.categories.index');
-    Route::post('sites/{site}/categories', [SiteCategoryController::class, 'store'])
-        ->name('sites.categories.store');
-    Route::delete('sites/{site}/categories/{category}', [SiteCategoryController::class, 'destroy'])
-        ->name('sites.categories.destroy');
-
-    Route::get('sites/{site}/authors', [SiteAuthorController::class, 'index'])
-        ->name('sites.authors.index');
 
     Route::post('sites/{site}/api-key', [SiteController::class, 'regenerateApiKey'])
         ->name('sites.api-key.update');
@@ -55,7 +43,64 @@ Route::middleware('auth')->group(function () {
         ->name('sites.status.update');
     Route::resource('sites', SiteController::class);
 
-    Route::resource('authors', AuthorController::class)->except(['show']);
+    Route::middleware('site.access')->group(function () {
+        Route::get('sites/{site}/authors/options', [SiteAuthorController::class, 'index'])
+            ->name('sites.authors.options');
+        Route::get('sites/{site}/categories/options', [SiteCategoryController::class, 'index'])
+            ->name('sites.categories.options');
+        Route::get('sites/{site}/categories/{categoryId}/topics', [TopicController::class, 'index'])
+            ->where('categoryId', '[0-9]+')
+            ->name('sites.topics.options');
+        Route::post('sites/{site}/topics', [TopicController::class, 'store'])
+            ->name('sites.topics.store');
+
+        Route::post('sites/{site}/articles/{articleUuid}/completion', [ArticlePublicationController::class, 'complete'])
+            ->where('articleUuid', '[a-f0-9\-]+')
+            ->name('sites.articles.completion.store');
+        Route::post('sites/{site}/articles/{articleUuid}/publications', [ArticlePublicationController::class, 'store'])
+            ->where('articleUuid', '[a-f0-9\-]+')
+            ->name('sites.articles.publications.store');
+
+        Route::get('sites/{site}/articles', [ArticleController::class, 'index'])->name('sites.articles.index');
+        Route::get('sites/{site}/articles/create', [ArticleController::class, 'create'])->name('sites.articles.create');
+        Route::post('sites/{site}/articles', [ArticleController::class, 'store'])->name('sites.articles.store');
+        Route::get('sites/{site}/articles/{articleUuid}', [ArticleController::class, 'show'])
+            ->where('articleUuid', '[a-f0-9\-]+')
+            ->name('sites.articles.show');
+        Route::get('sites/{site}/articles/{articleUuid}/edit', [ArticleController::class, 'edit'])
+            ->where('articleUuid', '[a-f0-9\-]+')
+            ->name('sites.articles.edit');
+        Route::put('sites/{site}/articles/{articleUuid}', [ArticleController::class, 'update'])
+            ->where('articleUuid', '[a-f0-9\-]+')
+            ->name('sites.articles.update');
+        Route::delete('sites/{site}/articles/{articleUuid}', [ArticleController::class, 'destroy'])
+            ->where('articleUuid', '[a-f0-9\-]+')
+            ->name('sites.articles.destroy');
+
+        Route::get('sites/{site}/authors', [AuthorController::class, 'index'])->name('sites.authors.index');
+        Route::get('sites/{site}/authors/create', [AuthorController::class, 'create'])->name('sites.authors.create');
+        Route::post('sites/{site}/authors', [AuthorController::class, 'store'])->name('sites.authors.store');
+        Route::get('sites/{site}/authors/{authorId}/edit', [AuthorController::class, 'edit'])
+            ->where('authorId', '[0-9]+')
+            ->name('sites.authors.edit');
+        Route::put('sites/{site}/authors/{authorId}', [AuthorController::class, 'update'])
+            ->where('authorId', '[0-9]+')
+            ->name('sites.authors.update');
+        Route::delete('sites/{site}/authors/{authorId}', [AuthorController::class, 'destroy'])
+            ->where('authorId', '[0-9]+')
+            ->name('sites.authors.destroy');
+
+        Route::get('sites/{site}/categories', [SiteCategoryController::class, 'manage'])
+            ->name('sites.categories.index');
+        Route::post('sites/{site}/categories', [SiteCategoryController::class, 'store'])
+            ->name('sites.categories.store');
+        Route::put('sites/{site}/categories/{categoryId}', [SiteCategoryController::class, 'update'])
+            ->where('categoryId', '[0-9]+')
+            ->name('sites.categories.update');
+        Route::delete('sites/{site}/categories/{categoryId}', [SiteCategoryController::class, 'destroy'])
+            ->where('categoryId', '[0-9]+')
+            ->name('sites.categories.destroy');
+    });
 
     Route::resource('users', UserController::class)->except(['show']);
 });

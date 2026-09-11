@@ -17,7 +17,7 @@ class PublishAuthorToSite
         $site = $author->site;
 
         if ($site === null || ! $site->is_active) {
-            throw new \RuntimeException('Author site is missing or inactive.');
+            throw new \InvalidArgumentException('Author site is missing or inactive.');
         }
 
         return $this->client->post(

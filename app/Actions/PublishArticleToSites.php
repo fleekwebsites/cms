@@ -119,6 +119,10 @@ class PublishArticleToSites
             $payload['site_category_id'] = $article->site_category_id;
         }
 
+        if ($article->topic_id !== null) {
+            $payload['topic_id'] = $article->topic_id;
+        }
+
         if ($article->author_id !== null) {
             $payload['author_id'] = $article->author_id;
         }

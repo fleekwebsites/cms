@@ -5,20 +5,25 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreSiteRequest;
 use App\Http\Requests\UpdateSiteRequest;
 use App\Models\Site;
+use App\Support\RemoteSiteGateway;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class SiteController extends Controller
 {
-    public function index(): View
+    public function __construct(private RemoteSiteGateway $gateway) {}
+
+    public function index(Request $request): View
     {
         $this->authorize('viewAny', Site::class);
 
-        abort_unless(request()->user()->isAdmin(), 403);
+        abort_unless($request->user()?->isAdmin() ?? false, 403);
 
         $sites = Site::query()
-            ->withCount('publishLogs')
+            ->withCount([
+                'pendingRemoteWrites as pending_writes_count' => fn ($query) => $query->where('status', 'pending'),
+            ])
             ->latest()
             ->orderByDesc('id')
             ->paginate(15);
@@ -50,12 +55,22 @@ class SiteController extends Controller
     {
         $this->authorize('view', $site);
 
-        $site->load([
-            'categories' => fn ($query) => $query->orderBy('name')->orderBy('id'),
-            'publishLogs' => fn ($query) => $query->with('article:id,title')->latest()->orderByDesc('id')->limit(20),
-        ]);
+        $categories = $this->gateway->fetchCategories($site);
+        $authors = $this->gateway->fetchAuthors($site);
+        $pendingWrites = $site->pendingRemoteWrites()
+            ->where('status', 'pending')
+            ->latest()
+            ->limit(8)
+            ->get();
 
-        return view('sites.show', ['site' => $site]);
+        return view('sites.show', [
+            'site' => $site,
+            'categories' => $categories->items,
+            'authors' => $authors->items,
+            'remoteReachable' => $categories->reachable && $authors->reachable,
+            'remoteMessage' => $categories->message ?? $authors->message,
+            'pendingWrites' => $pendingWrites,
+        ]);
     }
 
     public function edit(Site $site): View

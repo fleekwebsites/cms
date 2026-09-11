@@ -4,9 +4,12 @@ namespace App\Policies;
 
 use App\Models\Site;
 use App\Models\User;
+use App\Support\SiteAccess;
 
 class SitePolicy
 {
+    public function __construct(private SiteAccess $siteAccess) {}
+
     public function viewAny(User $user): bool
     {
         return true;
@@ -14,7 +17,12 @@ class SitePolicy
 
     public function view(User $user, Site $site): bool
     {
-        return $user->isAdmin();
+        return $this->siteAccess->canAccess($user, $site);
+    }
+
+    public function access(User $user, Site $site): bool
+    {
+        return $this->siteAccess->canAccess($user, $site);
     }
 
     public function create(User $user): bool

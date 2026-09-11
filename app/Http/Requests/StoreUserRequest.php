@@ -25,6 +25,11 @@ class StoreUserRequest extends FormRequest
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'confirmed', Password::defaults()],
             'role' => ['required', Rule::enum(Role::class)],
+            'delegations' => ['nullable', 'array'],
+            'delegations.*.enabled' => ['sometimes', 'boolean'],
+            'delegations.*.can_write_articles' => ['sometimes', 'boolean'],
+            'delegations.*.can_manage_authors' => ['sometimes', 'boolean'],
+            'delegations.*.can_manage_categories' => ['sometimes', 'boolean'],
         ];
     }
 }

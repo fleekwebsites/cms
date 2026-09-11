@@ -14,7 +14,7 @@
 
         <div>
             <label for="api_endpoint" class="label">API endpoint</label>
-            <input id="api_endpoint" name="api_endpoint" type="url" value="{{ old('api_endpoint') }}" required class="input" placeholder="https://example.com/api/cms/content">
+            <input id="api_endpoint" name="api_endpoint" type="url" value="{{ old('api_endpoint') }}" required class="input" placeholder="https://example.com/api/">
         </div>
 
         <label class="flex items-center gap-2 text-sm text-slate-600">

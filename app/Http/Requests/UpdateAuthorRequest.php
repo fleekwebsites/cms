@@ -3,17 +3,17 @@
 namespace App\Http\Requests;
 
 use App\Models\Author;
+use App\Models\Site;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class UpdateAuthorRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        $author = $this->route('author');
+        $site = $this->route('site');
 
-        return $author instanceof Author
-            && ($this->user()?->can('update', $author) ?? false);
+        return $site instanceof Site
+            && ($this->user()?->can('update', [Author::class, $site]) ?? false);
     }
 
     /**
@@ -21,18 +21,8 @@ class UpdateAuthorRequest extends FormRequest
      */
     public function rules(): array
     {
-        /** @var Author $author */
-        $author = $this->route('author');
-
         return [
-            'name' => [
-                'required',
-                'string',
-                'max:255',
-                Rule::unique('authors', 'name')
-                    ->where('site_id', $author->site_id)
-                    ->ignore($author->id),
-            ],
+            'name' => ['required', 'string', 'max:255'],
             'credentials' => ['nullable', 'string', 'max:255'],
             'bio' => ['nullable', 'string', 'max:2000'],
         ];

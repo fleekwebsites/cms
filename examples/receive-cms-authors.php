@@ -4,7 +4,7 @@
  * CMS author receiver.
  *
  * Endpoint (derived from content URL in CMS):
- *   https://yoursite.com/api/cms/receive-cms-authors.php
+ *   https://yoursite.com/api/receive-cms-authors.php
  *
  * JSON POST payload from CMS:
  *   { "id": 1, "name": "...", "credentials": "...", "bio": "..." }

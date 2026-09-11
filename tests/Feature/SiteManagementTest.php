@@ -70,6 +70,21 @@ class SiteManagementTest extends TestCase
         $this->assertTrue($site->fresh()->is_active);
     }
 
+    public function test_admin_connection_page_shows_api_key_categories_and_authors(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $site = Site::factory()->create(['name' => 'Nursing Elites']);
+
+        $this->actingAs($admin)
+            ->get(route('sites.show', $site))
+            ->assertOk()
+            ->assertSee('API key')
+            ->assertSee('Categories')
+            ->assertSee('Authors')
+            ->assertSee('Write article')
+            ->assertSee('Open workspace');
+    }
+
     public function test_admin_can_delete_a_site(): void
     {
         $admin = User::factory()->admin()->create();

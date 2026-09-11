@@ -5,7 +5,6 @@ namespace App\Http\Requests;
 use App\Models\Site;
 use App\Models\SiteCategory;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class StoreSiteCategoryRequest extends FormRequest
 {
@@ -22,16 +21,8 @@ class StoreSiteCategoryRequest extends FormRequest
      */
     public function rules(): array
     {
-        /** @var Site $site */
-        $site = $this->route('site');
-
         return [
-            'name' => [
-                'required',
-                'string',
-                'max:120',
-                Rule::unique('site_categories', 'name')->where('site_id', $site->id),
-            ],
+            'name' => ['required', 'string', 'max:120'],
         ];
     }
 }

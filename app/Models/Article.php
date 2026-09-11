@@ -17,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
-#[Fillable(['user_id', 'author_id', 'site_id', 'site_category_id', 'reading_time_minutes', 'uuid', 'type', 'title', 'slug', 'excerpt', 'keywords', 'featured_image_url', 'content', 'layout', 'status', 'published_at'])]
+#[Fillable(['user_id', 'author_id', 'site_id', 'site_category_id', 'topic_id', 'reading_time_minutes', 'uuid', 'type', 'title', 'slug', 'excerpt', 'keywords', 'featured_image_url', 'content', 'layout', 'status', 'published_at'])]
 class Article extends Model
 {
     /** @use HasFactory<ArticleFactory> */
@@ -74,6 +74,14 @@ class Article extends Model
     public function siteCategory(): BelongsTo
     {
         return $this->belongsTo(SiteCategory::class);
+    }
+
+    /**
+     * @return BelongsTo<Topic, $this>
+     */
+    public function topic(): BelongsTo
+    {
+        return $this->belongsTo(Topic::class);
     }
 
     /**

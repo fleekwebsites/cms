@@ -4,7 +4,7 @@
  * CMS category receiver.
  *
  * Endpoint (derived from content URL in CMS):
- *   https://yoursite.com/api/cms/receive-cms-categories.php
+ *   https://yoursite.com/api/receive-cms-categories.php
  *
  * JSON POST payload from CMS:
  *   { "id": 1, "name": "NP Programs" }

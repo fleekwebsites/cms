@@ -17,7 +17,7 @@ class PublishSiteCategoryToSite
         $site = $category->site;
 
         if ($site === null || ! $site->is_active) {
-            throw new \RuntimeException('Category site is missing or inactive.');
+            throw new \InvalidArgumentException('Category site is missing or inactive.');
         }
 
         return $this->client->post(

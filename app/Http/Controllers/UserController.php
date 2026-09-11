@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\Role;
 use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
+use App\Models\Site;
+use App\Models\SiteDelegation;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class UserController extends Controller
@@ -27,12 +31,14 @@ class UserController extends Controller
     {
         $this->authorize('create', User::class);
 
-        return view('users.create');
+        return view('users.create', $this->formData());
     }
 
     public function store(StoreUserRequest $request): RedirectResponse
     {
-        User::query()->create($request->safe()->only(['name', 'email', 'password', 'role']));
+        $user = User::query()->create($request->safe()->only(['name', 'email', 'password', 'role']));
+
+        $this->syncDelegations($user, $request);
 
         return redirect()
             ->route('users.index')
@@ -43,7 +49,12 @@ class UserController extends Controller
     {
         $this->authorize('update', $user);
 
-        return view('users.edit', ['user' => $user]);
+        $user->load('siteDelegations');
+
+        return view('users.edit', [
+            'user' => $user,
+            ...$this->formData(),
+        ]);
     }
 
     public function update(UpdateUserRequest $request, User $user): RedirectResponse
@@ -55,6 +66,7 @@ class UserController extends Controller
         }
 
         $user->update($attributes);
+        $this->syncDelegations($user->fresh(), $request);
 
         return redirect()
             ->route('users.index')
@@ -70,5 +82,46 @@ class UserController extends Controller
         return redirect()
             ->route('users.index')
             ->with('status', 'User deleted.');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function formData(): array
+    {
+        return [
+            'sites' => Site::query()->orderBy('name')->orderBy('id')->get(['id', 'name']),
+        ];
+    }
+
+    private function syncDelegations(User $user, Request $request): void
+    {
+        $user->siteDelegations()->delete();
+
+        if ($user->role === Role::Admin) {
+            return;
+        }
+
+        $validSiteIds = Site::query()->pluck('id')->all();
+
+        foreach ($request->input('delegations', []) as $siteId => $delegation) {
+            $siteId = (int) $siteId;
+
+            if (! in_array($siteId, $validSiteIds, true)) {
+                continue;
+            }
+
+            if (! $request->boolean("delegations.{$siteId}.enabled")) {
+                continue;
+            }
+
+            SiteDelegation::query()->create([
+                'user_id' => $user->id,
+                'site_id' => $siteId,
+                'can_write_articles' => $request->boolean("delegations.{$siteId}.can_write_articles"),
+                'can_manage_authors' => $request->boolean("delegations.{$siteId}.can_manage_authors"),
+                'can_manage_categories' => $request->boolean("delegations.{$siteId}.can_manage_categories"),
+            ]);
+        }
     }
 }
