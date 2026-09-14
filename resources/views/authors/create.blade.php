@@ -4,7 +4,7 @@
         <p class="mt-2 text-slate-600">{{ $site->name }}</p>
     </div>
 
-    <form method="POST" action="{{ route('sites.authors.store', $site) }}" class="card max-w-2xl space-y-5">
+    <form method="POST" action="{{ route('sites.authors.store', $site) }}" enctype="multipart/form-data" class="card max-w-2xl space-y-5">
         @csrf
         @include('authors._form')
         <div class="flex gap-3">

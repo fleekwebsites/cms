@@ -4,17 +4,17 @@
         <p class="mt-2 text-slate-600">{{ $site->name }}</p>
     </div>
 
-    <form method="POST" action="{{ route('sites.authors.update', [$site, $author]) }}" class="card max-w-2xl space-y-5">
+    <form method="POST" action="{{ route('sites.authors.update', [$site, $author->int('id') ?? $author->routeKey()]) }}" enctype="multipart/form-data" class="card max-w-2xl space-y-5">
         @csrf
         @method('PUT')
-        @include('authors._form', ['author' => $author])
+        @include('authors._form', ['author' => $author, 'resolvedProfilePhotoUrl' => $resolvedProfilePhotoUrl ?? null])
         <div class="flex gap-3">
             <button type="submit" class="btn-primary">Save author</button>
             <a href="{{ route('sites.authors.index', $site) }}" class="btn-secondary">Cancel</a>
         </div>
     </form>
 
-    <form method="POST" action="{{ route('sites.authors.destroy', [$site, $author]) }}" class="mt-6" onsubmit="return confirm('Delete this author?')">
+    <form method="POST" action="{{ route('sites.authors.destroy', [$site, $author->int('id') ?? $author->routeKey()]) }}" class="mt-6" onsubmit="return confirm('Delete this author?')">
         @csrf
         @method('DELETE')
         <button type="submit" class="btn-danger">Delete author</button>

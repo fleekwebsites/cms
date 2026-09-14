@@ -25,6 +25,8 @@ class UpdateAuthorRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'credentials' => ['nullable', 'string', 'max:255'],
             'bio' => ['nullable', 'string', 'max:2000'],
+            'years_of_experience' => ['nullable', 'integer', 'min:0', 'max:80'],
+            'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,gif,webp', 'max:5120'],
         ];
     }
 }

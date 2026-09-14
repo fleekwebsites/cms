@@ -9,7 +9,7 @@
  * Remote URLs (via .htaccess rewrite):
  *   GET    /api/authors/           → list JSON array
  *   GET    /api/authors/{id}      → single author object
- *   POST   /api/authors/          → upsert { id, name, credentials?, bio? }
+ *   POST   /api/authors/          → upsert { id, name, credentials?, bio?, years_of_experience?, profile_photo_* }
  *                                     id = CMS client id on create; remote id on update
  *                                     response includes { id, client_id }
  *   DELETE /api/authors/{id}      → remove
@@ -20,6 +20,10 @@
 declare(strict_types=1);
 
 require_once __DIR__.'/../../../conn/config.php';
+
+const CMS_AUTHOR_PHOTOS_ROOT = __DIR__.'/../author-photos';
+const CMS_PUBLIC_AUTHOR_PHOTOS_BASE = '/authors/photos';
+const CMS_MAX_AUTHOR_PHOTO_BYTES = 5 * 1024 * 1024;
 
 // --- HTTP helpers -------------------------------------------------------------
 
@@ -191,6 +195,8 @@ function cms_ensure_author_table(mysqli $db): void
             name VARCHAR(255) NOT NULL,
             credentials VARCHAR(255) NULL,
             bio TEXT NULL,
+            years_of_experience INT UNSIGNED NULL,
+            profile_photo_url VARCHAR(512) NULL,
             idempotency_key VARCHAR(255) NULL,
             received_at DATETIME NOT NULL,
             updated_at DATETIME NOT NULL,
@@ -198,6 +204,17 @@ function cms_ensure_author_table(mysqli $db): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
 
         return;
+    }
+
+    foreach ([
+        'years_of_experience' => 'INT UNSIGNED NULL',
+        'profile_photo_url' => 'VARCHAR(512) NULL',
+    ] as $column => $definition) {
+        $result = $db->query("SHOW COLUMNS FROM cms_authors LIKE '{$column}'");
+
+        if ($result !== false && $result->num_rows === 0) {
+            $db->query("ALTER TABLE cms_authors ADD COLUMN {$column} {$definition}");
+        }
     }
 
     $column = $db->query("SHOW COLUMNS FROM cms_authors LIKE 'client_id'");
@@ -237,17 +254,27 @@ function cms_find_author_by_request_id(mysqli $db, int $requestId): ?array
  */
 function cms_author_array(array $row): array
 {
-    return [
+    $author = [
         'id' => (int) $row['id'],
         'name' => (string) $row['name'],
         'credentials' => $row['credentials'],
         'bio' => $row['bio'],
     ];
+
+    if (isset($row['years_of_experience']) && $row['years_of_experience'] !== null && $row['years_of_experience'] !== '') {
+        $author['years_of_experience'] = (int) $row['years_of_experience'];
+    }
+
+    if (isset($row['profile_photo_url']) && is_string($row['profile_photo_url']) && $row['profile_photo_url'] !== '') {
+        $author['profile_photo_url'] = $row['profile_photo_url'];
+    }
+
+    return $author;
 }
 
 function cms_list_authors(mysqli $db): void
 {
-    $result = $db->query('SELECT id, name, credentials, bio FROM cms_authors ORDER BY name, id');
+    $result = $db->query('SELECT id, name, credentials, bio, years_of_experience, profile_photo_url FROM cms_authors ORDER BY name, id');
 
     if ($result === false) {
         cms_respond(500, ['error' => 'Database query failed.']);
@@ -264,23 +291,13 @@ function cms_list_authors(mysqli $db): void
 
 function cms_show_author(mysqli $db, int $id): void
 {
-    $stmt = $db->prepare('SELECT id, name, credentials, bio FROM cms_authors WHERE id = ? LIMIT 1');
+    $author = cms_find_author_by_request_id($db, $id);
 
-    if ($stmt === false) {
-        cms_respond(500, ['error' => 'Database preparation failed.']);
-    }
-
-    $stmt->bind_param('i', $id);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result?->fetch_assoc();
-    $stmt->close();
-
-    if (! is_array($row)) {
+    if ($author === null) {
         cms_respond(404, ['error' => 'Author not found.']);
     }
 
-    cms_respond(200, cms_author_array($row));
+    cms_respond(200, cms_author_array($author));
 }
 
 function cms_upsert_author(mysqli $db): void
@@ -292,9 +309,16 @@ function cms_upsert_author(mysqli $db): void
     $name = cms_required_string($payload, 'name');
     $credentials = cms_string_or_null($payload['credentials'] ?? null);
     $bio = cms_string_or_null($payload['bio'] ?? null);
+    $yearsOfExperience = cms_int_or_null($payload['years_of_experience'] ?? null);
     $receivedAt = cms_received_at();
     $idempotencyKey = cms_request_header('Idempotency-Key');
     $existing = cms_find_author_by_request_id($db, $requestId);
+    $photoKey = (string) ($existing['id'] ?? $requestId);
+    $profilePhotoUrl = cms_process_profile_photo(
+        $payload,
+        $photoKey,
+        cms_string_or_null($existing['profile_photo_url'] ?? null),
+    );
 
     if ($existing !== null) {
         $remoteId = (int) $existing['id'];
@@ -304,6 +328,8 @@ function cms_upsert_author(mysqli $db): void
             name = ?,
             credentials = ?,
             bio = ?,
+            years_of_experience = ?,
+            profile_photo_url = ?,
             idempotency_key = ?,
             received_at = ?,
             updated_at = ?
@@ -314,10 +340,12 @@ function cms_upsert_author(mysqli $db): void
         }
 
         $stmt->bind_param(
-            'ssssssi',
+            'sssissssi',
             $name,
             $credentials,
             $bio,
+            $yearsOfExperience,
+            $profilePhotoUrl,
             $idempotencyKey,
             $receivedAt,
             $receivedAt,
@@ -327,9 +355,9 @@ function cms_upsert_author(mysqli $db): void
         $clientId = $requestId;
 
         $stmt = $db->prepare('INSERT INTO cms_authors (
-            client_id, name, credentials, bio, idempotency_key, received_at, updated_at
+            client_id, name, credentials, bio, years_of_experience, profile_photo_url, idempotency_key, received_at, updated_at
         ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?
         )');
 
         if ($stmt === false) {
@@ -337,11 +365,13 @@ function cms_upsert_author(mysqli $db): void
         }
 
         $stmt->bind_param(
-            'issssss',
+            'isssissss',
             $clientId,
             $name,
             $credentials,
             $bio,
+            $yearsOfExperience,
+            $profilePhotoUrl,
             $idempotencyKey,
             $receivedAt,
             $receivedAt,
@@ -364,18 +394,147 @@ function cms_upsert_author(mysqli $db): void
         'client_id' => $clientId,
         'name' => $name,
         'credentials' => $credentials,
+        'years_of_experience' => $yearsOfExperience,
+        'profile_photo_url' => $profilePhotoUrl,
     ]);
+}
+
+function cms_process_profile_photo(array $payload, string $authorKey, ?string $existingUrl = null): ?string
+{
+    if (isset($payload['profile_photo_base64'], $payload['profile_photo_mime'])) {
+        $binary = cms_decode_base64((string) $payload['profile_photo_base64']);
+        $mime = cms_normalize_mime((string) $payload['profile_photo_mime']);
+        $filename = cms_safe_filename(
+            (string) ($payload['profile_photo_filename'] ?? 'profile'),
+            $mime,
+        );
+        $relativePath = "{$authorKey}/{$filename}";
+        $absolutePath = CMS_AUTHOR_PHOTOS_ROOT.'/'.$relativePath;
+
+        cms_write_author_photo($absolutePath, $binary, $mime);
+
+        return cms_public_author_photo_url($relativePath);
+    }
+
+    $url = cms_string_or_null($payload['profile_photo_url'] ?? null);
+
+    if ($url !== null) {
+        if (cms_is_local_author_photo_url($url)) {
+            return $url;
+        }
+
+        return $existingUrl;
+    }
+
+    return $existingUrl;
+}
+
+function cms_write_author_photo(string $absolutePath, string $binary, string $mime): void
+{
+    if (strlen($binary) > CMS_MAX_AUTHOR_PHOTO_BYTES) {
+        cms_respond(413, ['error' => 'Profile photo exceeds maximum allowed size.']);
+    }
+
+    if (! str_starts_with($mime, 'image/')) {
+        cms_respond(422, ['error' => 'Only image uploads are supported.']);
+    }
+
+    cms_ensure_directory(dirname($absolutePath));
+
+    if (file_put_contents($absolutePath, $binary) === false) {
+        cms_respond(500, ['error' => 'Failed to write profile photo to storage.']);
+    }
+}
+
+function cms_public_author_photo_url(string $relativePath): string
+{
+    return rtrim(CMS_PUBLIC_AUTHOR_PHOTOS_BASE, '/').'/'.ltrim($relativePath, '/');
+}
+
+function cms_is_local_author_photo_url(string $url): bool
+{
+    $path = parse_url($url, PHP_URL_PATH);
+
+    if (! is_string($path)) {
+        return str_starts_with($url, CMS_PUBLIC_AUTHOR_PHOTOS_BASE);
+    }
+
+    return str_starts_with($path, CMS_PUBLIC_AUTHOR_PHOTOS_BASE);
+}
+
+function cms_decode_base64(string $value): string
+{
+    $normalized = preg_replace('/\s+/', '', $value) ?? $value;
+    $binary = base64_decode($normalized, true);
+
+    if ($binary === false) {
+        cms_respond(422, ['error' => 'Invalid profile photo encoding.']);
+    }
+
+    return $binary;
+}
+
+function cms_normalize_mime(string $mime): string
+{
+    $mime = strtolower(trim($mime));
+
+    return match ($mime) {
+        'image/jpg' => 'image/jpeg',
+        default => $mime,
+    };
+}
+
+function cms_safe_filename(string $filename, string $mime): string
+{
+    $basename = pathinfo($filename, PATHINFO_FILENAME);
+    $basename = preg_replace('/[^a-zA-Z0-9_-]+/', '-', $basename) ?? 'profile';
+    $basename = trim($basename, '-');
+
+    if ($basename === '') {
+        $basename = 'profile';
+    }
+
+    return $basename.'.'.cms_extension_for_mime($mime);
+}
+
+function cms_extension_for_mime(string $mime): string
+{
+    return match ($mime) {
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/gif' => 'gif',
+        'image/webp' => 'webp',
+        default => 'bin',
+    };
+}
+
+function cms_ensure_directory(string $path): void
+{
+    if (is_dir($path)) {
+        return;
+    }
+
+    if (! mkdir($path, 0775, true) && ! is_dir($path)) {
+        cms_respond(500, ['error' => 'Failed to create storage directory.']);
+    }
 }
 
 function cms_delete_author(mysqli $db, int $id): void
 {
+    $author = cms_find_author_by_request_id($db, $id);
+
+    if ($author === null) {
+        cms_respond(404, ['error' => 'Author not found.']);
+    }
+
+    $remoteId = (int) $author['id'];
     $stmt = $db->prepare('DELETE FROM cms_authors WHERE id = ?');
 
     if ($stmt === false) {
         cms_respond(500, ['error' => 'Database preparation failed.']);
     }
 
-    $stmt->bind_param('i', $id);
+    $stmt->bind_param('i', $remoteId);
 
     if (! $stmt->execute()) {
         cms_respond(500, ['error' => 'Database execution failed: '.$stmt->error]);

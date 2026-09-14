@@ -1,5 +1,6 @@
 @php
     $author ??= null;
+    $resolvedProfilePhotoUrl ??= null;
 @endphp
 
 <div>
@@ -16,6 +17,29 @@
 <div>
     <label for="credentials" class="label">Credentials</label>
     <input id="credentials" name="credentials" type="text" value="{{ old('credentials', $author?->string('credentials')) }}" maxlength="255" class="input" placeholder="DNP, FNP-BC">
+</div>
+
+<div>
+    <label for="years_of_experience" class="label">Years of experience</label>
+    <input
+        id="years_of_experience"
+        name="years_of_experience"
+        type="number"
+        min="0"
+        max="80"
+        value="{{ old('years_of_experience', $author?->int('years_of_experience')) }}"
+        class="input max-w-xs"
+        placeholder="12"
+    >
+</div>
+
+<div>
+    <label for="profile_photo" class="label">Profile photo</label>
+    @if ($resolvedProfilePhotoUrl)
+        <img src="{{ $resolvedProfilePhotoUrl }}" alt="Current profile photo" class="mb-3 h-24 w-24 rounded-full border border-slate-200 object-cover">
+    @endif
+    <input id="profile_photo" name="profile_photo" type="file" accept="image/*" class="input">
+    <p class="mt-1 text-xs text-slate-500">JPEG, PNG, GIF, or WebP up to 5 MB.</p>
 </div>
 
 <div>
