@@ -120,6 +120,27 @@ class AuthorManagementTest extends TestCase
             ->assertSee('Elena Marsh');
     }
 
+    public function test_legacy_author_edit_path_redirects_to_edit_route(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $site = Site::factory()->create([
+            'api_endpoint' => 'https://remote.test/api/cms/content',
+        ]);
+
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://remote.test/api/cms/authors/7' => Http::response([
+                'id' => 7,
+                'name' => 'Elena Marsh',
+                'credentials' => 'DNP, FNP-BC',
+            ], 200),
+        ]);
+
+        $this->actingAs($admin)
+            ->get("/sites/{$site->id}/authors/7/edit")
+            ->assertRedirect(route('sites.authors.edit', [$site, 7]));
+    }
+
     public function test_writer_cannot_manage_authors(): void
     {
         $writer = User::factory()->writer()->create();

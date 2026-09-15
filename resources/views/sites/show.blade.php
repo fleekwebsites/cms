@@ -92,7 +92,7 @@
                         <p class="text-sm font-medium text-slate-900">{{ $author->displayLine() }}</p>
                     </div>
                     @can('update', [App\Models\Author::class, $site])
-                        <a href="{{ route('sites.authors.edit', [$site, $author->int('id')]) }}" class="text-sm text-indigo-600 hover:text-indigo-500">Edit</a>
+                        <a href="{{ route('sites.authors.edit', [$site, $author->int('id') ?? $author->routeKey()]) }}" class="text-sm text-indigo-600 hover:text-indigo-500">Edit</a>
                     @endcan
                 </div>
             @empty

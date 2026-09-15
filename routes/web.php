@@ -12,6 +12,7 @@ use App\Http\Controllers\SiteCategoryController;
 use App\Http\Controllers\SiteController;
 use App\Http\Controllers\TopicController;
 use App\Http\Controllers\UserController;
+use App\Models\Site;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -80,9 +81,13 @@ Route::middleware('auth')->group(function () {
         Route::get('sites/{site}/authors', [AuthorController::class, 'index'])->name('sites.authors.index');
         Route::get('sites/{site}/authors/create', [AuthorController::class, 'create'])->name('sites.authors.create');
         Route::post('sites/{site}/authors', [AuthorController::class, 'store'])->name('sites.authors.store');
-        Route::get('sites/{site}/authors/{authorId}/edit', [AuthorController::class, 'edit'])
+        Route::get('sites/{site}/authors/{authorId}', [AuthorController::class, 'edit'])
             ->where('authorId', '[0-9]+')
             ->name('sites.authors.edit');
+        Route::get('sites/{site}/authors/{authorId}/edit', function (Site $site, string $authorId) {
+            return redirect()->route('sites.authors.edit', [$site, $authorId]);
+        })
+            ->where('authorId', '[0-9]+');
         Route::put('sites/{site}/authors/{authorId}', [AuthorController::class, 'update'])
             ->where('authorId', '[0-9]+')
             ->name('sites.authors.update');

@@ -38,7 +38,7 @@
                             <td class="px-6 py-4 text-slate-500">{{ $author->string('credentials') ?? '—' }}</td>
                             <td class="px-6 py-4 text-right">
                                 @can('update', [App\Models\Author::class, $site])
-                                    <a href="{{ route('sites.authors.edit', [$site, $author->int('id')]) }}" class="text-indigo-600 hover:text-indigo-500">Edit</a>
+                                    <a href="{{ route('sites.authors.edit', [$site, $author->int('id') ?? $author->routeKey()]) }}" class="text-indigo-600 hover:text-indigo-500">Edit</a>
                                 @endcan
                             </td>
                         </tr>
