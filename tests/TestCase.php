@@ -25,13 +25,12 @@ abstract class TestCase extends BaseTestCase
     {
         Http::preventStrayRequests();
 
-        $base = rtrim(str_replace('/content', '', $site->api_endpoint), '/');
         $content = rtrim($site->api_endpoint, '/');
 
         $defaults = [
-            "{$base}/categories*" => Http::response([['id' => 1, 'name' => 'General']], 200),
-            "{$base}/authors*" => Http::response([['id' => 1, 'name' => 'Felix Ombui', 'credentials' => 'DNP']], 200),
-            "{$base}/topics*" => Http::response([['id' => 1, 'name' => 'Study Tips', 'site_category_id' => 1]], 200),
+            "{$content}/categories*" => Http::response([['id' => 1, 'name' => 'General']], 200),
+            "{$content}/authors*" => Http::response([['id' => 1, 'name' => 'Felix Ombui', 'credentials' => 'DNP']], 200),
+            "{$content}/topics*" => Http::response([['id' => 1, 'name' => 'Study Tips', 'site_category_id' => 1]], 200),
             "{$content}*" => Http::response([], 200),
         ];
 

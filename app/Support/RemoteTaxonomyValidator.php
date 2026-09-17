@@ -2,7 +2,10 @@
 
 namespace App\Support;
 
+use App\Enums\PendingRemoteWriteStatus;
 use App\Enums\RemoteResource;
+use App\Models\PendingRemoteWrite;
+use App\Models\RemoteIdMapping;
 use App\Models\Site;
 use Illuminate\Validation\Validator;
 
@@ -50,7 +53,7 @@ class RemoteTaxonomyValidator
     }
 
     /**
-     * @return array<int, string>
+     * @return array<int, int>
      */
     public function topicIds(Site $site, int $categoryId): array
     {
@@ -60,11 +63,28 @@ class RemoteTaxonomyValidator
             return [];
         }
 
-        return $fetch->items
-            ->map(fn (RemoteRecord $record): ?int => $record->int('id'))
-            ->filter()
-            ->values()
+        return $this->remoteTopicIds($fetch);
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    public function acceptableTopicIds(Site $site, int $categoryId): array
+    {
+        $remoteIds = $this->topicIds($site, $categoryId);
+
+        if ($remoteIds === []) {
+            return [];
+        }
+
+        $clientIds = RemoteIdMapping::query()
+            ->where('site_id', $site->id)
+            ->where('resource', RemoteResource::Topics)
+            ->whereIn('remote_id', $remoteIds)
+            ->pluck('client_id')
             ->all();
+
+        return array_values(array_unique([...$remoteIds, ...$clientIds]));
     }
 
     public function validateArticleTaxonomy(Validator $validator, Site $site): void
@@ -95,9 +115,75 @@ class RemoteTaxonomyValidator
             $topicId = (int) ($validator->getData()['topic_id'] ?? 0);
             $resolvedTopicId = $this->idMapper->resolveRemoteId($site, RemoteResource::Topics, $topicId);
 
-            if (! in_array($resolvedTopicId, $this->topicIds($site, $resolvedCategoryId), true)) {
+            if (! $this->topicIsValid($site, $resolvedCategoryId, $topicId, $resolvedTopicId)) {
                 $validator->errors()->add('topic_id', 'The selected topic is invalid for this category.');
             }
         }
+    }
+
+    private function topicIsValid(Site $site, int $resolvedCategoryId, int $topicId, int $resolvedTopicId): bool
+    {
+        $acceptableIds = $this->acceptableTopicIds($site, $resolvedCategoryId);
+
+        if ($acceptableIds !== []
+            && (in_array($topicId, $acceptableIds, true) || in_array($resolvedTopicId, $acceptableIds, true))) {
+            return true;
+        }
+
+        if ($this->topicExistsOnRemote($site, $resolvedCategoryId, $topicId, $resolvedTopicId)) {
+            return true;
+        }
+
+        return PendingRemoteWrite::query()
+            ->where('site_id', $site->id)
+            ->where('resource', RemoteResource::Topics)
+            ->where('status', PendingRemoteWriteStatus::Pending)
+            ->where('resource_key', 'topic-'.$topicId)
+            ->exists();
+    }
+
+    private function topicExistsOnRemote(
+        Site $site,
+        int $resolvedCategoryId,
+        int $topicId,
+        int $resolvedTopicId,
+    ): bool {
+        $fetch = $this->gateway->fetchAllTopics($site);
+
+        if (! $fetch->reachable) {
+            return false;
+        }
+
+        return $fetch->items->contains(function (RemoteRecord $record) use (
+            $resolvedCategoryId,
+            $topicId,
+            $resolvedTopicId,
+        ): bool {
+            $remoteTopicId = $record->int('id');
+
+            if ($remoteTopicId === null) {
+                return false;
+            }
+
+            if ($remoteTopicId !== $topicId && $remoteTopicId !== $resolvedTopicId) {
+                return false;
+            }
+
+            $topicCategoryId = $record->int('site_category_id');
+
+            return $topicCategoryId === null || $topicCategoryId === $resolvedCategoryId;
+        });
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function remoteTopicIds(RemoteFetchResult $fetch): array
+    {
+        return $fetch->items
+            ->map(fn (RemoteRecord $record): ?int => $record->int('id'))
+            ->filter()
+            ->values()
+            ->all();
     }
 }

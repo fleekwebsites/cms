@@ -45,8 +45,8 @@ class ArticlePolicyTest extends TestCase
                 'content' => '<p>Hello</p>',
                 'editor_user_id' => 99999,
             ], 200),
-            'https://remote.test/api/cms/authors*' => Http::response([], 200),
-            'https://remote.test/api/cms/categories*' => Http::response([], 200),
+            'https://remote.test/api/cms/content/authors*' => Http::response([], 200),
+            'https://remote.test/api/cms/content/categories*' => Http::response([], 200),
         ]);
 
         $this->actingAs($writer)

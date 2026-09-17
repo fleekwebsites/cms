@@ -1,18 +1,20 @@
-# Place in the folder that serves /api/ on your site.
-# CMS api_endpoint: https://yourdomain.com/api/content
+# Place in the folder that serves /api/cms/ on your site.
+# CMS api_endpoint: https://yourdomain.com/api/cms/content
+#
+# Articles:  {api_endpoint}/           and {api_endpoint}/{uuid}
+# Topics:    {api_endpoint}/topics/
+# Categories:{api_endpoint}/categories/
+# Authors:   {api_endpoint}/authors/
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    RewriteRule ^content/?$ receive-cms-content.php [L,QSA]
-    RewriteRule ^authors/?$ authors.php [L,QSA]
-    RewriteRule ^authors/([0-9]+)/?$ authors.php?id=$1 [L,QSA]
-    RewriteRule ^categories/?$ categories.php [L,QSA]
-    RewriteRule ^categories/([0-9]+)/?$ categories.php?id=$1 [L,QSA]
-    RewriteRule ^topics/?$ topics.php [L,QSA]
-    RewriteRule ^topics/([0-9]+)/?$ topics.php?id=$1 [L,QSA]
+    RewriteRule ^content/topics/?$ topics.php [L,QSA]
+    RewriteRule ^content/topics/([0-9]+)/?$ topics.php?id=$1 [L,QSA]
+    RewriteRule ^content/categories/?$ categories.php [L,QSA]
+    RewriteRule ^content/categories/([0-9]+)/?$ categories.php?id=$1 [L,QSA]
+    RewriteRule ^content/authors/?$ authors.php [L,QSA]
+    RewriteRule ^content/authors/([0-9]+)/?$ authors.php?id=$1 [L,QSA]
     RewriteRule ^content/?$ articles.php [L,QSA]
     RewriteRule ^content/([a-f0-9\-]{36})/?$ articles.php?uuid=$1 [L,QSA]
-    RewriteRule ^articles/?$ articles.php [L,QSA]
-    RewriteRule ^articles/([a-f0-9\-]{36})/?$ articles.php?uuid=$1 [L,QSA]
 </IfModule>

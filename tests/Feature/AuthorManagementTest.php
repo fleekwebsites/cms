@@ -22,7 +22,7 @@ class AuthorManagementTest extends TestCase
         ]);
 
         $this->fakeRemoteSite($site, [
-            'https://remote.test/api/cms/authors*' => Http::response(['status' => 'accepted'], 201),
+            'https://remote.test/api/cms/content/authors*' => Http::response(['status' => 'accepted'], 201),
         ]);
 
         $this->actingAs($admin)
@@ -37,7 +37,8 @@ class AuthorManagementTest extends TestCase
             'name' => 'Elena Marsh',
         ]);
 
-        Http::assertSent(fn ($request): bool => str_contains($request->url(), '/authors')
+        Http::assertSent(fn ($request): bool => $request->method() === 'POST'
+            && str_contains($request->url(), '/authors')
             && $request['name'] === 'Elena Marsh'
             && $request['credentials'] === 'DNP, FNP-BC');
     }
@@ -50,7 +51,7 @@ class AuthorManagementTest extends TestCase
         ]);
 
         $this->fakeRemoteSite($site, [
-            'https://remote.test/api/cms/authors*' => Http::response(['status' => 'accepted'], 201),
+            'https://remote.test/api/cms/content/authors*' => Http::response(['status' => 'accepted'], 201),
         ]);
 
         $this->actingAs($admin)
@@ -63,7 +64,8 @@ class AuthorManagementTest extends TestCase
             ])
             ->assertRedirect(route('sites.authors.index', $site));
 
-        Http::assertSent(fn ($request): bool => str_contains($request->url(), '/authors')
+        Http::assertSent(fn ($request): bool => $request->method() === 'POST'
+            && str_contains($request->url(), '/authors')
             && $request['years_of_experience'] === 12
             && isset($request['profile_photo_base64']));
     }
@@ -76,12 +78,12 @@ class AuthorManagementTest extends TestCase
         ]);
 
         $this->fakeRemoteSite($site, [
-            'https://remote.test/api/cms/authors/7' => Http::response([
+            'https://remote.test/api/cms/content/authors/7' => Http::response([
                 'id' => 7,
                 'name' => 'Elena Marsh',
                 'profile_photo_url' => '/authors/photos/7/profile.jpg',
             ], 200),
-            'https://remote.test/api/cms/authors*' => Http::response(['status' => 'accepted'], 201),
+            'https://remote.test/api/cms/content/authors*' => Http::response(['status' => 'accepted'], 201),
         ]);
 
         $this->actingAs($admin)
@@ -107,8 +109,8 @@ class AuthorManagementTest extends TestCase
 
         Http::preventStrayRequests();
         Http::fake([
-            'https://remote.test/api/cms/authors/7' => Http::response([], 404),
-            'https://remote.test/api/cms/authors*' => Http::response([
+            'https://remote.test/api/cms/content/authors/7' => Http::response([], 404),
+            'https://remote.test/api/cms/content/authors*' => Http::response([
                 ['id' => 7, 'name' => 'Elena Marsh', 'credentials' => 'DNP, FNP-BC'],
             ], 200),
         ]);
@@ -129,7 +131,7 @@ class AuthorManagementTest extends TestCase
 
         Http::preventStrayRequests();
         Http::fake([
-            'https://remote.test/api/cms/authors/7' => Http::response([
+            'https://remote.test/api/cms/content/authors/7' => Http::response([
                 'id' => 7,
                 'name' => 'Elena Marsh',
                 'credentials' => 'DNP, FNP-BC',
@@ -161,7 +163,7 @@ class AuthorManagementTest extends TestCase
         $this->grantSiteAccess($writer, $site);
 
         $this->fakeRemoteSite($site, [
-            'https://remote.test/api/cms/authors*' => Http::response([
+            'https://remote.test/api/cms/content/authors*' => Http::response([
                 ['id' => 1, 'name' => 'Elena Marsh', 'credentials' => 'DNP, FNP-BC'],
             ], 200),
         ]);

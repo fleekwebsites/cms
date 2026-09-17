@@ -161,7 +161,13 @@ async function addTopic() {
             name,
             site_category_id: categorySelect.value,
         });
-        appendOption(topicSelect, created.data);
+
+        if (created.data.queued) {
+            window.alert(created.data.message ?? 'The topic will sync when the remote site is available.');
+            return;
+        }
+
+        await loadTopics(categorySelect.value, created.data.id);
         newTopicInput.value = '';
     } catch (error) {
         window.alert(errorMessage(error));

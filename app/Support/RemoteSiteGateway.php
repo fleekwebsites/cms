@@ -54,6 +54,11 @@ class RemoteSiteGateway
         ]);
     }
 
+    public function fetchAllTopics(Site $site): RemoteFetchResult
+    {
+        return $this->fetchCollection($site, RemoteResource::Topics);
+    }
+
     /**
      * @param  array<string, mixed>  $payload
      */
@@ -276,6 +281,10 @@ class RemoteSiteGateway
             $this->queue->markSent($site, $resource, $resourceKey);
             $remoteId = $this->idMapper->syncFromResponse($site, $resource, $payload, $response);
 
+            if ($remoteId === null && $resource->usesClientIds()) {
+                $remoteId = $this->inferRemoteIdAfterSend($site, $resource, $payload);
+            }
+
             return RemoteSendResult::delivered($response->status(), $remoteId);
         }
 
@@ -379,5 +388,144 @@ class RemoteSiteGateway
     public function mergePendingArticles(Site $site, Collection $remoteArticles): Collection
     {
         return $this->queue->mergePendingArticles($site, $remoteArticles);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function inferRemoteIdAfterSend(Site $site, RemoteResource $resource, array $payload): ?int
+    {
+        $clientId = $this->intFromPayload($payload['id'] ?? null);
+
+        if ($clientId === null) {
+            return null;
+        }
+
+        $remoteId = match ($resource) {
+            RemoteResource::Categories => $this->matchCategoryRemoteId($site, $payload),
+            RemoteResource::Authors => $this->matchAuthorRemoteId($site, $payload),
+            RemoteResource::Topics => $this->matchTopicRemoteId($site, $payload),
+            default => null,
+        };
+
+        if ($remoteId !== null && $remoteId !== $clientId) {
+            $this->idMapper->recordMapping($site, $resource, $clientId, $remoteId);
+        }
+
+        return $remoteId;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function matchCategoryRemoteId(Site $site, array $payload): ?int
+    {
+        $name = is_string($payload['name'] ?? null) ? trim($payload['name']) : '';
+
+        if ($name === '') {
+            return null;
+        }
+
+        $fetch = $this->fetchCategories($site);
+
+        if (! $fetch->reachable) {
+            return null;
+        }
+
+        return $fetch->items
+            ->first(fn (RemoteRecord $category): bool => strcasecmp($category->string('name') ?? '', $name) === 0)
+            ?->int('id');
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function matchAuthorRemoteId(Site $site, array $payload): ?int
+    {
+        $name = is_string($payload['name'] ?? null) ? trim($payload['name']) : '';
+
+        if ($name === '') {
+            return null;
+        }
+
+        $credentials = is_string($payload['credentials'] ?? null) ? trim($payload['credentials']) : '';
+
+        $fetch = $this->fetchAuthors($site);
+
+        if (! $fetch->reachable) {
+            return null;
+        }
+
+        return $fetch->items
+            ->first(function (RemoteRecord $author) use ($name, $credentials): bool {
+                if (strcasecmp($author->string('name') ?? '', $name) !== 0) {
+                    return false;
+                }
+
+                if ($credentials === '') {
+                    return true;
+                }
+
+                return strcasecmp($author->string('credentials') ?? '', $credentials) === 0;
+            })
+            ?->int('id');
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function matchTopicRemoteId(Site $site, array $payload): ?int
+    {
+        $categoryId = $this->intFromPayload($payload['site_category_id'] ?? null);
+        $name = is_string($payload['name'] ?? null) ? trim($payload['name']) : '';
+
+        if ($categoryId === null || $name === '') {
+            return null;
+        }
+
+        $fetch = $this->fetchTopics($site, $categoryId);
+
+        if (! $fetch->reachable) {
+            return null;
+        }
+
+        $remoteId = $fetch->items
+            ->first(fn (RemoteRecord $topic): bool => strcasecmp($topic->string('name') ?? '', $name) === 0)
+            ?->int('id');
+
+        if ($remoteId !== null) {
+            return $remoteId;
+        }
+
+        $allTopics = $this->fetchAllTopics($site);
+
+        if (! $allTopics->reachable) {
+            return null;
+        }
+
+        return $allTopics->items
+            ->first(function (RemoteRecord $topic) use ($name, $categoryId): bool {
+                if (strcasecmp($topic->string('name') ?? '', $name) !== 0) {
+                    return false;
+                }
+
+                $topicCategoryId = $topic->int('site_category_id');
+
+                return $topicCategoryId === null || $topicCategoryId === $categoryId;
+            })
+            ?->int('id');
+    }
+
+    private function intFromPayload(mixed $value): ?int
+    {
+        if (is_int($value)) {
+            return $value;
+        }
+
+        if (is_string($value) && ctype_digit($value)) {
+            return (int) $value;
+        }
+
+        return null;
     }
 }

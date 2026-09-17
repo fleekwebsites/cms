@@ -20,8 +20,9 @@ class SiteApiEndpointTest extends TestCase
             'https://remote.test/api/cms/content/550e8400-e29b-41d4-a716-446655440000',
             $site->apiEndpointFor('articles/550e8400-e29b-41d4-a716-446655440000'),
         );
-        $this->assertSame('https://remote.test/api/cms/authors', $site->apiEndpointFor('authors'));
-        $this->assertSame('https://remote.test/api/cms/categories', $site->apiEndpointFor('categories'));
+        $this->assertSame('https://remote.test/api/cms/content/authors/', $site->apiEndpointFor('authors'));
+        $this->assertSame('https://remote.test/api/cms/content/categories/', $site->apiEndpointFor('categories'));
+        $this->assertSame('https://remote.test/api/cms/content/topics/', $site->apiEndpointFor('topics'));
     }
 
     #[Test]
@@ -36,7 +37,7 @@ class SiteApiEndpointTest extends TestCase
             'https://remote.test/api/endpoint/550e8400-e29b-41d4-a716-446655440000',
             $site->apiEndpointFor('articles/550e8400-e29b-41d4-a716-446655440000'),
         );
-        $this->assertSame('https://remote.test/api/endpoint/authors', $site->apiEndpointFor('authors'));
+        $this->assertSame('https://remote.test/api/endpoint/authors/', $site->apiEndpointFor('authors'));
     }
 
     #[Test]

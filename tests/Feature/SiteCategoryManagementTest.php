@@ -20,7 +20,7 @@ class SiteCategoryManagementTest extends TestCase
         ]);
 
         $this->fakeRemoteSite($site, [
-            'https://remote.test/api/cms/categories*' => Http::response(['status' => 'accepted'], 201),
+            'https://remote.test/api/cms/content/categories*' => Http::response(['status' => 'accepted'], 201),
         ]);
 
         $this->actingAs($admin)
@@ -33,7 +33,8 @@ class SiteCategoryManagementTest extends TestCase
             'name' => 'NP Programs',
         ]);
 
-        Http::assertSent(fn ($request): bool => str_contains($request->url(), '/categories')
+        Http::assertSent(fn ($request): bool => $request->method() === 'POST'
+            && str_contains($request->url(), '/categories')
             && $request['name'] === 'NP Programs');
     }
 
@@ -46,7 +47,7 @@ class SiteCategoryManagementTest extends TestCase
         $this->grantSiteAccess($writer, $site);
 
         $this->fakeRemoteSite($site, [
-            'https://remote.test/api/cms/categories*' => Http::response([
+            'https://remote.test/api/cms/content/categories*' => Http::response([
                 ['id' => 1, 'name' => 'Burnout'],
             ], 200),
         ]);
@@ -65,7 +66,7 @@ class SiteCategoryManagementTest extends TestCase
         ]);
 
         $this->fakeRemoteSite($site, [
-            'https://remote.test/api/cms/categories*' => Http::response(['status' => 'accepted'], 201),
+            'https://remote.test/api/cms/content/categories*' => Http::response(['status' => 'accepted'], 201),
         ]);
 
         $this->actingAs($admin)
@@ -74,7 +75,8 @@ class SiteCategoryManagementTest extends TestCase
             ])
             ->assertRedirect(route('sites.categories.index', $site));
 
-        Http::assertSent(fn ($request): bool => str_contains($request->url(), '/categories')
+        Http::assertSent(fn ($request): bool => $request->method() === 'POST'
+            && str_contains($request->url(), '/categories')
             && $request['id'] === 1
             && $request['name'] === 'Updated programs');
     }
@@ -102,7 +104,7 @@ class SiteCategoryManagementTest extends TestCase
         $this->grantSiteAccess($writer, $site);
 
         $this->fakeRemoteSite($site, [
-            'https://remote.test/api/cms/categories*' => Http::response(['status' => 'accepted'], 201),
+            'https://remote.test/api/cms/content/categories*' => Http::response(['status' => 'accepted'], 201),
         ]);
 
         $this->actingAs($writer)

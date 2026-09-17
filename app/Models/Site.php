@@ -122,11 +122,13 @@ class Site extends Model
                 : $endpoint.'/'.$articleKey;
         }
 
-        if (str_ends_with($endpoint, '/content')) {
-            return substr($endpoint, 0, -strlen('content')).$resource;
+        $path = $endpoint.'/'.$resource;
+
+        if (! preg_match('#/\d+$#', $resource)) {
+            $path .= '/';
         }
 
-        return $endpoint.'/'.$resource;
+        return $path;
     }
 
     public function remoteOrigin(): ?string

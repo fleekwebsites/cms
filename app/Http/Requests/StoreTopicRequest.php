@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\RemoteResource;
 use App\Models\Site;
 use App\Models\Topic;
+use App\Support\RemoteIdMapper;
 use App\Support\RemoteTaxonomyValidator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
@@ -43,8 +45,13 @@ class StoreTopicRequest extends FormRequest
             }
 
             $categoryId = (int) $validator->getData()['site_category_id'];
+            $resolvedCategoryId = app(RemoteIdMapper::class)->resolveRemoteId(
+                $site,
+                RemoteResource::Categories,
+                $categoryId,
+            );
 
-            if (! in_array($categoryId, app(RemoteTaxonomyValidator::class)->categoryIds($site), true)) {
+            if (! in_array($resolvedCategoryId, app(RemoteTaxonomyValidator::class)->categoryIds($site), true)) {
                 $validator->errors()->add('site_category_id', 'The selected category is invalid for this site.');
             }
         });

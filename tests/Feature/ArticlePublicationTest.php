@@ -37,9 +37,9 @@ class ArticlePublicationTest extends TestCase
                 'author_id' => 1,
                 'editor_user_id' => $writer->id,
             ], 200),
-            'https://remote.test/api/cms/categories*' => Http::response([['id' => 1, 'name' => 'General']], 200),
-            'https://remote.test/api/cms/authors*' => Http::response([['id' => 1, 'name' => 'Author']], 200),
-            'https://remote.test/api/cms/topics*' => Http::response([], 200),
+            'https://remote.test/api/cms/content/categories*' => Http::response([['id' => 1, 'name' => 'General']], 200),
+            'https://remote.test/api/cms/content/authors*' => Http::response([['id' => 1, 'name' => 'Author']], 200),
+            'https://remote.test/api/cms/content/topics*' => Http::response([], 200),
             'https://remote.test/api/cms/content/' => Http::response(['status' => 'accepted'], 201),
         ]);
 
@@ -90,9 +90,9 @@ class ArticlePublicationTest extends TestCase
                 'content' => '<p><span class="ql-color-e60000">Red text</span> and <span style="background-color: #ffff00;">Highlighted text</span></p>',
                 'editor_user_id' => $writer->id,
             ], 200),
-            'https://remote.test/api/cms/categories*' => Http::response([['id' => 1, 'name' => 'General']], 200),
-            'https://remote.test/api/cms/authors*' => Http::response([['id' => 1, 'name' => 'Author']], 200),
-            'https://remote.test/api/cms/topics*' => Http::response([], 200),
+            'https://remote.test/api/cms/content/categories*' => Http::response([['id' => 1, 'name' => 'General']], 200),
+            'https://remote.test/api/cms/content/authors*' => Http::response([['id' => 1, 'name' => 'Author']], 200),
+            'https://remote.test/api/cms/content/topics*' => Http::response([], 200),
             'https://remote.test/api/cms/content/' => Http::response(['status' => 'accepted'], 201),
         ]);
 

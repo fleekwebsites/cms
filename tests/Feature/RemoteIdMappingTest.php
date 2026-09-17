@@ -22,7 +22,7 @@ class RemoteIdMappingTest extends TestCase
         ]);
 
         $this->fakeRemoteSite($site, [
-            'https://remote.test/api/cms/categories*' => function ($request) {
+            'https://remote.test/api/cms/content/categories*' => function ($request) {
                 return Http::response([
                     'status' => 'accepted',
                     'id' => 7,
@@ -64,7 +64,7 @@ class RemoteIdMappingTest extends TestCase
         ]);
 
         $this->fakeRemoteSite($site, [
-            'https://remote.test/api/cms/categories*' => Http::response([
+            'https://remote.test/api/cms/content/categories*' => Http::response([
                 ['id' => 12, 'name' => 'Mapped category'],
             ], 200),
             'https://remote.test/api/cms/content*' => Http::response(['status' => 'accepted'], 201),

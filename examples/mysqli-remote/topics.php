@@ -7,12 +7,13 @@
  *   https://yourdomain.com/api/cms/content
  *
  * Remote URLs (via .htaccess rewrite):
- *   GET    /api/cms/topics/                    → list JSON array (?site_category_id=)
- *   GET    /api/cms/topics/{id}               → single topic object
- *   POST   /api/cms/topics/                   → upsert { id, site_category_id, name }
+ *   GET    {api_endpoint}/topics/                    → list JSON array (?site_category_id=)
+ *   GET    {api_endpoint}/topics/{id}               → single topic object
+ *   POST   {api_endpoint}/topics/                   → upsert { id, site_category_id, name }
  *                                             id = CMS client id on create; remote id on update
+ *                                             same name + site_category_id updates existing row
  *                                             response includes { id, client_id, site_category_id }
- *   DELETE /api/cms/topics/{id}               → remove
+ *   DELETE {api_endpoint}/topics/{id}               → remove
  *
  * Headers: X-API-Key (required), Idempotency-Key (POST/DELETE)
  */
@@ -225,6 +226,23 @@ function cms_find_topic_by_request_id(mysqli $db, int $requestId): ?array
     return is_array($row) ? $row : null;
 }
 
+function cms_find_topic_by_name_and_category(mysqli $db, int $siteCategoryId, string $name): ?array
+{
+    $stmt = $db->prepare('SELECT * FROM cms_topics WHERE site_category_id = ? AND LOWER(name) = LOWER(?) LIMIT 1');
+
+    if ($stmt === false) {
+        cms_respond(500, ['error' => 'Database preparation failed.']);
+    }
+
+    $stmt->bind_param('is', $siteCategoryId, $name);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result?->fetch_assoc();
+    $stmt->close();
+
+    return is_array($row) ? $row : null;
+}
+
 function cms_resolve_category_id(mysqli $db, int $requestCategoryId): int
 {
     $stmt = $db->prepare('SELECT id FROM cms_categories WHERE id = ? OR client_id = ? LIMIT 1');
@@ -297,23 +315,13 @@ function cms_list_topics(mysqli $db): void
 
 function cms_show_topic(mysqli $db, int $id): void
 {
-    $stmt = $db->prepare('SELECT id, name, site_category_id FROM cms_topics WHERE id = ? LIMIT 1');
+    $topic = cms_find_topic_by_request_id($db, $id);
 
-    if ($stmt === false) {
-        cms_respond(500, ['error' => 'Database preparation failed.']);
-    }
-
-    $stmt->bind_param('i', $id);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result?->fetch_assoc();
-    $stmt->close();
-
-    if (! is_array($row)) {
+    if ($topic === null) {
         cms_respond(404, ['error' => 'Topic not found.']);
     }
 
-    cms_respond(200, cms_topic_array($row));
+    cms_respond(200, cms_topic_array($topic));
 }
 
 function cms_upsert_topic(mysqli $db): void
@@ -327,12 +335,21 @@ function cms_upsert_topic(mysqli $db): void
     $receivedAt = cms_received_at();
     $idempotencyKey = cms_request_header('Idempotency-Key');
     $existing = cms_find_topic_by_request_id($db, $requestId);
+    $matchedByName = false;
+
+    if ($existing === null) {
+        $existing = cms_find_topic_by_name_and_category($db, $siteCategoryId, $name);
+        $matchedByName = $existing !== null;
+    }
 
     if ($existing !== null) {
         $remoteId = (int) $existing['id'];
-        $clientId = isset($existing['client_id']) ? (int) $existing['client_id'] : $requestId;
+        $clientId = $matchedByName
+            ? $requestId
+            : (isset($existing['client_id']) ? (int) $existing['client_id'] : $requestId);
 
         $stmt = $db->prepare('UPDATE cms_topics SET
+            client_id = ?,
             site_category_id = ?,
             name = ?,
             idempotency_key = ?,
@@ -345,7 +362,8 @@ function cms_upsert_topic(mysqli $db): void
         }
 
         $stmt->bind_param(
-            'issssi',
+            'iissssi',
+            $clientId,
             $siteCategoryId,
             $name,
             $idempotencyKey,
@@ -398,13 +416,20 @@ function cms_upsert_topic(mysqli $db): void
 
 function cms_delete_topic(mysqli $db, int $id): void
 {
+    $topic = cms_find_topic_by_request_id($db, $id);
+
+    if ($topic === null) {
+        cms_respond(404, ['error' => 'Topic not found.']);
+    }
+
+    $remoteId = (int) $topic['id'];
     $stmt = $db->prepare('DELETE FROM cms_topics WHERE id = ?');
 
     if ($stmt === false) {
         cms_respond(500, ['error' => 'Database preparation failed.']);
     }
 
-    $stmt->bind_param('i', $id);
+    $stmt->bind_param('i', $remoteId);
 
     if (! $stmt->execute()) {
         cms_respond(500, ['error' => 'Database execution failed: '.$stmt->error]);
@@ -419,7 +444,7 @@ function cms_delete_topic(mysqli $db, int $id): void
 
     cms_respond(200, [
         'status' => 'deleted',
-        'id' => $id,
+        'id' => $remoteId,
     ]);
 }
 

@@ -46,7 +46,8 @@ class ArticleManagementTest extends TestCase
             'title' => 'Launch announcement',
         ]);
 
-        Http::assertSent(fn ($request): bool => str_contains($request->url(), '/content')
+        Http::assertSent(fn ($request): bool => $request->method() === 'POST'
+            && str_contains($request->url(), '/content')
             && $request['title'] === 'Launch announcement'
             && $request['editor_user_id'] === $writer->id);
     }
@@ -210,8 +211,8 @@ class ArticleManagementTest extends TestCase
                     'content' => '<p>Hello</p>',
                 ], 200)
                 ->push(['status' => 'deleted'], 200),
-            'https://remote.test/api/cms/authors*' => Http::response([], 200),
-            'https://remote.test/api/cms/categories*' => Http::response([], 200),
+            'https://remote.test/api/cms/content/authors*' => Http::response([], 200),
+            'https://remote.test/api/cms/content/categories*' => Http::response([], 200),
         ]);
 
         $this->actingAs($admin)
