@@ -123,13 +123,6 @@ jobs:
             cd "$APP_DIR"
 
             echo "✅ Working directory: $(pwd)"
-            
-            #  Clear stale cache files BEFORE running artisan
-            rm -f bootstrap/cache/config.php
-            rm -f bootstrap/cache/routes-v7.php
-            rm -f bootstrap/cache/services.php
-            rm -f bootstrap/cache/packages.php
-
 
             # Restore .env if missing
             if [ ! -f .env ]; then
