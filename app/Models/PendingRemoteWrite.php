@@ -88,4 +88,11 @@ class PendingRemoteWrite extends Model
 
         return $this->resource->label().' '.$this->resource_key;
     }
+
+    public function displayError(): ?string
+    {
+        $message = is_string($this->error_message) ? trim($this->error_message) : '';
+
+        return $message === '' ? null : $message;
+    }
 }

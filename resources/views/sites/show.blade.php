@@ -101,17 +101,47 @@
         </div>
     </section>
 
-    @if ($pendingWrites->isNotEmpty())
-        <section class="card mt-6">
-            <h2 class="mb-4 text-lg font-semibold text-slate-900">Waiting to sync</h2>
-            <div class="space-y-2">
+    <section class="card mt-6">
+        <div class="mb-4">
+            <h2 class="text-lg font-semibold text-slate-900">Waiting to sync</h2>
+            <p class="mt-1 text-sm text-slate-600">
+                @if ($pendingWrites->isEmpty())
+                    Nothing is queued for this site right now.
+                @else
+                    {{ $pendingWrites->count() }} {{ $pendingWrites->count() === 1 ? 'item' : 'items' }} queued for this site. Retried automatically every 5 minutes.
+                @endif
+            </p>
+        </div>
+        @if ($pendingWrites->isNotEmpty())
+            <div class="space-y-3">
                 @foreach ($pendingWrites as $write)
-                    <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                        <p class="font-medium">{{ $write->displayTitle() }}</p>
-                        <p class="mt-1 text-xs">{{ $write->resource->label() }} · {{ $write->created_at->diffForHumans() }}</p>
+                    <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <p class="font-medium text-slate-900">{{ $write->displayTitle() }}</p>
+                                <p class="mt-1 text-xs text-amber-900/80">
+                                    {{ $write->resource->label() }}
+                                    · {{ strtoupper($write->method) }}
+                                    · queued {{ $write->created_at->diffForHumans() }}
+                                    @if ($write->attempts > 0)
+                                        · {{ $write->attempts }} {{ $write->attempts === 1 ? 'retry' : 'retries' }}
+                                    @endif
+                                    @if ($write->last_attempted_at)
+                                        · last tried {{ $write->last_attempted_at->diffForHumans() }}
+                                    @endif
+                                </p>
+                            </div>
+                        </div>
+                        @if ($write->displayError())
+                            <p class="mt-3 rounded-md border border-amber-300/80 bg-white/70 px-3 py-2 text-xs text-rose-800">
+                                {{ $write->displayError() }}
+                            </p>
+                        @else
+                            <p class="mt-3 text-xs text-amber-900/70">Waiting for the next retry attempt.</p>
+                        @endif
                     </div>
                 @endforeach
             </div>
-        </section>
-    @endif
+        @endif
+    </section>
 </x-layouts.app>

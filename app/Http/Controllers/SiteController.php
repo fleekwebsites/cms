@@ -60,7 +60,6 @@ class SiteController extends Controller
         $pendingWrites = $site->pendingRemoteWrites()
             ->where('status', 'pending')
             ->latest()
-            ->limit(8)
             ->get();
 
         return view('sites.show', [

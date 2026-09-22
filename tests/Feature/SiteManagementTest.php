@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Enums\RemoteResource;
+use App\Models\PendingRemoteWrite;
 use App\Models\Site;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -83,6 +85,49 @@ class SiteManagementTest extends TestCase
             ->assertSee('Authors')
             ->assertSee('Write article')
             ->assertSee('Open workspace');
+    }
+
+    public function test_admin_connection_page_shows_all_pending_writes_with_errors(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $site = Site::factory()->create(['name' => 'Nursing Elites']);
+
+        PendingRemoteWrite::factory()->for($site)->create([
+            'payload' => [
+                'uuid' => '11111111-1111-1111-1111-111111111111',
+                'title' => 'Queued article',
+                'type' => 'blog',
+                'layout' => 'default',
+                'status' => 'draft',
+                'content' => '<p>Hello</p>',
+                'content_format' => 'html',
+            ],
+            'error_message' => 'Connection timed out',
+            'attempts' => 2,
+            'last_attempted_at' => now()->subMinutes(3),
+        ]);
+
+        PendingRemoteWrite::factory()->for($site)->create([
+            'payload' => [
+                'name' => 'Exam prep',
+                'site_category_id' => 1,
+                'id' => 456789,
+            ],
+            'resource' => RemoteResource::Topics,
+            'resource_key' => 'topic-456789',
+            'error_message' => 'Internal Server Error',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('sites.show', $site))
+            ->assertOk()
+            ->assertSee('Waiting to sync')
+            ->assertSee('2 items queued for this site')
+            ->assertSee('Queued article')
+            ->assertSee('Exam prep')
+            ->assertSee('Connection timed out')
+            ->assertSee('Internal Server Error')
+            ->assertSee('2 retries');
     }
 
     public function test_admin_can_delete_a_site(): void
