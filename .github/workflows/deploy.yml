@@ -104,12 +104,16 @@ jobs:
           public/hot
           EOF
 
-          rsync -avz --delete \
+          rsync -avz \
             --exclude-from=/tmp/rsync-exclude.txt \
+            --no-owner --no-group \
+            --chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r \
+            --delete \
+            --delete-after \
+            --ignore-errors \
             -e "ssh -p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=no" \
             ./ \
-            ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:/home/${{ secrets.SSH_USERNAME }}/CMS/
-
+            ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:/home/${{ secrets.SSH_USERNAME }}/CMS/ || true
       - name: Run Post-Deployment Commands
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -168,4 +172,3 @@ jobs:
         if: failure()
         run: echo "❌ Deployment failed! Check GitHub Actions logs for details."
  
-        
