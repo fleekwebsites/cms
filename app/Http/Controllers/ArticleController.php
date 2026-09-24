@@ -12,6 +12,7 @@ use App\Models\Site;
 use App\Models\SiteCategory;
 use App\Models\User;
 use App\Support\ArticleContentFormatter;
+use App\Support\AuthorCategoryScope;
 use App\Support\RemoteArticlePayload;
 use App\Support\RemoteFetchResult;
 use App\Support\RemoteMediaUrlResolver;
@@ -32,6 +33,7 @@ class ArticleController extends Controller
         private RemoteArticlePayload $payloadBuilder,
         private SiteAccess $siteAccess,
         private RemoteMediaUrlResolver $mediaUrlResolver,
+        private AuthorCategoryScope $authorCategoryScope,
     ) {}
 
     public function index(Request $request, Site $site): View
@@ -257,13 +259,17 @@ class ArticleController extends Controller
 
         $remoteReachable = $categories->reachable && $authors->reachable;
 
+        $filteredAuthors = $categoryId > 0
+            ? $this->authorCategoryScope->filterAuthorsForCategory($site, $authors->items, $categoryId)
+            : $authors->items;
+
         return [
             'types' => ArticleType::cases(),
             'layouts' => ArticleLayout::cases(),
             'statuses' => ArticleStatus::cases(),
             'siteCategories' => $categories->items,
             'siteTopics' => $topics->items,
-            'siteAuthors' => $authors->items,
+            'siteAuthors' => $filteredAuthors,
             'editorContent' => $this->editorContentForForm($request, $site, $article),
             'canCreateTaxonomy' => $request->user()?->can('create', [SiteCategory::class, $site]) ?? false,
             'remoteReachable' => $remoteReachable,

@@ -404,12 +404,20 @@
     padding-left: 9em;
 }
 
-#content-editor .ql-editor {
-    min-height: 18rem;
-}
-
+/* Quill 2 puts .ql-container on #content-editor itself (toolbar is a preceding sibling). */
+#content-editor.ql-container,
 #content-editor .ql-container {
     @apply rounded-b-lg border-slate-300;
+    max-height: 95rem;
+    overflow: hidden;
+}
+
+#content-editor.ql-container .ql-editor,
+#content-editor .ql-container .ql-editor {
+    min-height: 0;
+    height: 100%;
+    max-height: 100%;
+    overflow-y: auto;
 }
 
 #content-editor .ql-toolbar {

@@ -46,3 +46,33 @@
     <label for="bio" class="label">Bio</label>
     <textarea id="bio" name="bio" rows="5" maxlength="2000" class="input">{{ old('bio', $author?->string('bio')) }}</textarea>
 </div>
+
+@php
+    $siteCategories ??= collect();
+    $assignedCategoryIds ??= [];
+    $selectedAuthorCategoryIds = old('site_category_ids', $assignedCategoryIds);
+    if (! is_array($selectedAuthorCategoryIds)) {
+        $selectedAuthorCategoryIds = [];
+    }
+@endphp
+
+@if ($siteCategories->isNotEmpty())
+    <div>
+        <p class="label">Allowed categories</p>
+        <p class="mt-1 text-xs text-slate-500">Optional. Leave all unchecked to allow this author on any category. Check one or more to limit where they can be selected on articles.</p>
+        <div class="mt-3 max-h-48 space-y-2 overflow-y-auto rounded-lg border border-slate-200 p-3">
+            @foreach ($siteCategories as $category)
+                @php($categoryId = $category->int('id'))
+                <label class="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                        type="checkbox"
+                        name="site_category_ids[]"
+                        value="{{ $categoryId }}"
+                        @checked(in_array($categoryId, $selectedAuthorCategoryIds, true) || in_array((string) $categoryId, $selectedAuthorCategoryIds, true))
+                    >
+                    <span>{{ $category->string('name') }}</span>
+                </label>
+            @endforeach
+        </div>
+    </div>
+@endif

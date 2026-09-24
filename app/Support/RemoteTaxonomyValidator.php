@@ -14,6 +14,7 @@ class RemoteTaxonomyValidator
     public function __construct(
         private RemoteSiteGateway $gateway,
         private RemoteIdMapper $idMapper,
+        private AuthorCategoryScope $authorCategoryScope,
     ) {}
 
     /**
@@ -109,6 +110,10 @@ class RemoteTaxonomyValidator
 
         if (! in_array($resolvedAuthorId, $this->authorIds($site), true)) {
             $validator->errors()->add('author_id', 'The selected author is invalid for this site.');
+        }
+
+        if (! $this->authorCategoryScope->authorMayUseCategory($site, $authorId, $categoryId)) {
+            $validator->errors()->add('author_id', 'The selected author is not allowed for this category.');
         }
 
         if (($validator->getData()['type'] ?? null) === 'blog') {

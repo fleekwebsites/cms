@@ -90,6 +90,8 @@
                     name="author_id"
                     class="input"
                     required
+                    data-selected="{{ $selectedAuthorId }}"
+                    data-authors-url="{{ route('sites.authors.options', $site) }}"
                 >
                     @if ($siteAuthors->isEmpty())
                         <option value="">No authors on remote site</option>
@@ -102,7 +104,7 @@
                         @endforeach
                     @endif
                 </select>
-                <p class="mt-1 text-xs text-slate-500">You are the editor. The author is the published byline.</p>
+                <p class="mt-1 text-xs text-slate-500">You are the editor. The author is the published byline. Authors may be limited to the selected category.</p>
             </div>
         </section>
 
@@ -207,6 +209,6 @@
             data-upload-url="{{ route('articles.images.store') }}"
             required
         >{{ $editorContent ?? '' }}</textarea>
-        <div id="content-editor" class="min-h-[27rem] rounded-lg border border-slate-300 bg-white"></div>
+        <div id="content-editor" class="rounded-lg border border-slate-300 bg-white"></div>
     </section>
 </div>

@@ -7,6 +7,7 @@ use App\Http\Requests\StoreAuthorRequest;
 use App\Http\Requests\UpdateAuthorRequest;
 use App\Models\Author;
 use App\Models\Site;
+use App\Support\AuthorCategoryScope;
 use App\Support\RemoteAuthorPayload;
 use App\Support\RemoteIdMapper;
 use App\Support\RemoteMediaUrlResolver;
@@ -28,6 +29,7 @@ class AuthorController extends Controller
         private RemoteAuthorPayload $authorPayload,
         private RemoteMediaUrlResolver $mediaUrlResolver,
         private RemoteIdMapper $idMapper,
+        private AuthorCategoryScope $authorCategoryScope,
     ) {}
 
     public function index(Request $request, Site $site): View
@@ -67,7 +69,10 @@ class AuthorController extends Controller
                 ->with('error', $fetch->message);
         }
 
-        return view('authors.create', ['site' => $site]);
+        return view('authors.create', [
+            'site' => $site,
+            'siteCategories' => $this->gateway->fetchCategories($site)->items,
+        ]);
     }
 
     public function store(StoreAuthorRequest $request, Site $site): RedirectResponse
@@ -83,6 +88,12 @@ class AuthorController extends Controller
 
         $result = $this->gateway->sendAuthor($site, $payload, $request->user()->id);
 
+        $this->authorCategoryScope->syncForAuthor(
+            $site,
+            $id,
+            $request->input('site_category_ids', []),
+        );
+
         return $this->redirectWithResult($site, $result, 'Author added.');
     }
 
@@ -96,12 +107,20 @@ class AuthorController extends Controller
 
         abort_unless($this->siteAccess->canManageAuthors(request()->user(), $site), 403);
 
+        $categories = $this->gateway->fetchCategories($site);
+
         return view('authors.edit', [
             'site' => $site,
             'author' => $author,
             'resolvedProfilePhotoUrl' => $this->mediaUrlResolver->resolve(
                 $author->string('profile_photo_url'),
                 $site,
+            ),
+            'siteCategories' => $categories->items,
+            'assignedCategoryIds' => $this->authorCategoryScope->selectedCategoryIdsForForm(
+                $site,
+                (int) $authorId,
+                $categories->items,
             ),
         ]);
     }
@@ -121,6 +140,12 @@ class AuthorController extends Controller
 
         $result = $this->gateway->sendAuthor($site, $payload, $request->user()->id);
 
+        $this->authorCategoryScope->syncForAuthor(
+            $site,
+            (int) $authorId,
+            $request->input('site_category_ids', []),
+        );
+
         return $this->redirectWithResult($site, $result, 'Author updated.');
     }
 
@@ -129,6 +154,8 @@ class AuthorController extends Controller
         abort_unless($this->siteAccess->canManageAuthors($request->user(), $site), 403);
 
         $result = $this->gateway->deleteAuthor($site, $authorId, $request->user()->id);
+
+        $this->authorCategoryScope->deleteForAuthor($site, (int) $authorId);
 
         return $this->redirectWithResult($site, $result, 'Author removed.');
     }

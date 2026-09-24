@@ -3,6 +3,7 @@ const faqLayoutField = document.querySelector('#faq-layout-field');
 const layoutSelect = document.querySelector('#layout');
 const categorySelect = document.querySelector('#site_category_id');
 const topicSelect = document.querySelector('#topic_id');
+const authorSelect = document.querySelector('#author_id');
 const topicField = document.querySelector('#topic-field');
 const addCategoryButton = document.querySelector('[data-add-category]');
 const addTopicButton = document.querySelector('[data-add-topic]');
@@ -62,17 +63,17 @@ function appendOption(select, item, selected = true) {
     select.value = String(item.id);
 }
 
-function setTopicOptions(placeholder, items, selectedId = null) {
-    if (! (topicSelect instanceof HTMLSelectElement)) {
+function setSelectOptions(select, placeholder, items, selectedId = null) {
+    if (! (select instanceof HTMLSelectElement)) {
         return;
     }
 
-    topicSelect.innerHTML = '';
+    select.innerHTML = '';
 
     const placeholderOption = document.createElement('option');
     placeholderOption.value = '';
     placeholderOption.textContent = placeholder;
-    topicSelect.appendChild(placeholderOption);
+    select.appendChild(placeholderOption);
 
     items.forEach((item) => {
         const option = document.createElement('option');
@@ -83,8 +84,38 @@ function setTopicOptions(placeholder, items, selectedId = null) {
             option.selected = true;
         }
 
-        topicSelect.appendChild(option);
+        select.appendChild(option);
     });
+}
+
+function setTopicOptions(placeholder, items, selectedId = null) {
+    setSelectOptions(topicSelect, placeholder, items, selectedId);
+}
+
+async function loadAuthors(categoryId, selectedId = null) {
+    if (! (authorSelect instanceof HTMLSelectElement)) {
+        return;
+    }
+
+    if (! categoryId) {
+        setSelectOptions(authorSelect, 'Select a category first', []);
+        authorSelect.required = false;
+        return;
+    }
+
+    const baseUrl = authorSelect.dataset.authorsUrl ?? '';
+    const url = `${baseUrl}?site_category_id=${encodeURIComponent(String(categoryId))}`;
+
+    try {
+        const response = await window.axios.get(url);
+        const placeholder = response.data.length === 0 ? 'No authors for this category' : 'Select an author';
+        const selected = selectedId ?? authorSelect.dataset.selected ?? null;
+        setSelectOptions(authorSelect, placeholder, response.data, selected);
+        authorSelect.required = true;
+    } catch (error) {
+        setSelectOptions(authorSelect, 'Unable to load authors', []);
+        console.error(error);
+    }
 }
 
 async function loadTopics(categoryId, selectedId = null) {
@@ -132,7 +163,11 @@ async function addCategory() {
         if (topicSelect instanceof HTMLSelectElement) {
             topicSelect.dataset.selected = '';
         }
+        if (authorSelect instanceof HTMLSelectElement) {
+            authorSelect.dataset.selected = '';
+        }
         await loadTopics(created.data.id);
+        await loadAuthors(created.data.id);
     } catch (error) {
         window.alert(errorMessage(error));
         console.error(error);
@@ -181,12 +216,21 @@ if (typeSelect instanceof HTMLSelectElement) {
 }
 
 if (categorySelect instanceof HTMLSelectElement) {
+    loadAuthors(
+        categorySelect.value,
+        authorSelect instanceof HTMLSelectElement ? authorSelect.dataset.selected : null,
+    );
+
     categorySelect.addEventListener('change', () => {
         if (topicSelect instanceof HTMLSelectElement) {
             topicSelect.dataset.selected = '';
         }
+        if (authorSelect instanceof HTMLSelectElement) {
+            authorSelect.dataset.selected = '';
+        }
 
         loadTopics(categorySelect.value);
+        loadAuthors(categorySelect.value);
     });
 
     if (categorySelect.value) {

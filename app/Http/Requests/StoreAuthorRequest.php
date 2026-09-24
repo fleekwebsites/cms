@@ -27,6 +27,8 @@ class StoreAuthorRequest extends FormRequest
             'bio' => ['nullable', 'string', 'max:2000'],
             'years_of_experience' => ['nullable', 'integer', 'min:0', 'max:80'],
             'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,gif,webp', 'max:5120'],
+            'site_category_ids' => ['nullable', 'array'],
+            'site_category_ids.*' => ['integer'],
         ];
     }
 }
